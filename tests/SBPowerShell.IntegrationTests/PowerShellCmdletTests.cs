@@ -1,0 +1,404 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Management.Automation;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus;
+using SBPowerShell.Models;
+using Xunit;
+
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
+namespace SBPowerShell.IntegrationTests;
+
+public class ServiceBusFixture : IAsyncLifetime
+{
+    private readonly HttpClient _httpClient = new();
+    private readonly Dictionary<string, string> _env;
+
+    public ServiceBusFixture()
+    {
+        RepoRoot = LocateRepoRoot();
+        _env = LoadEnv(Path.Combine(RepoRoot, ".env"));
+
+        EmulatorHost = GetEnvValueOrDefault("EMULATOR_HOST", "localhost");
+        AmqpPort = int.TryParse(GetEnvValueOrDefault("EMULATOR_AMQP_PORT", "5672"), out var amqp) ? amqp : 5672;
+        HttpPort = int.TryParse(GetEnvValueOrDefault("EMULATOR_HTTP_PORT", "5300"), out var http) ? http : 5300;
+
+        var sasKey = GetEnvValue("SAS_KEY_VALUE") ?? throw new InvalidOperationException("SAS_KEY_VALUE missing in .env");
+        ConnectionString = $"Endpoint=sb://{EmulatorHost};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey={sasKey};UseDevelopmentEmulator=true;";
+
+        ModulePath = Path.Combine(AppContext.BaseDirectory, "SBPowerShell.psd1");
+        if (!File.Exists(ModulePath))
+        {
+            // fallback to module output in project bin
+            var debugModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Debug", "net8.0", "SBPowerShell.psd1");
+            var releaseModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Release", "net8.0", "SBPowerShell.psd1");
+            ModulePath = File.Exists(debugModule) ? debugModule : releaseModule;
+        }
+    }
+
+    public string RepoRoot { get; } = null!;
+    public string ConnectionString { get; } = null!;
+    public string ModulePath { get; } = null!;
+    public string EmulatorHost { get; } = null!;
+    public int AmqpPort { get; }
+    public int HttpPort { get; }
+
+    public async Task InitializeAsync()
+    {
+        await WaitForEmulatorAsync(TimeSpan.FromSeconds(90));
+        await ClearQueuesAndSubscriptions();
+    }
+
+    public Task DisposeAsync()
+    {
+        _httpClient.Dispose();
+        return Task.CompletedTask;
+    }
+
+    public PowerShell CreateShell()
+    {
+        var ps = PowerShell.Create();
+        ps.AddCommand("Import-Module").AddArgument(ModulePath).AddParameter("Force", true).Invoke();
+        EnsureNoErrors(ps);
+        ps.Commands.Clear();
+        return ps;
+    }
+
+    public PSMessage[] NewMessages(string? sessionId, IEnumerable<string> bodies, IDictionary<string, object>? customProps = null)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("New-SBMessage");
+        ps.AddParameter("Body", bodies.ToArray());
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            ps.AddParameter("SessionId", sessionId);
+        }
+
+        if (customProps != null && customProps.Count > 0)
+        {
+            var ht = new Hashtable();
+            foreach (var kv in customProps)
+            {
+                ht[kv.Key] = kv.Value;
+            }
+            ps.AddParameter("CustomProperties", new[] { ht });
+        }
+
+        var result = ps.Invoke<PSObject>();
+        EnsureNoErrors(ps);
+        return result.Select(o => (PSMessage)o.BaseObject).ToArray();
+    }
+
+    public void SendToQueue(string queue, PSMessage[] messages, bool perSessionThreadAuto = false, int perSessionThread = 0)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Send-SBMessage")
+            .AddParameter("Queue", queue)
+            .AddParameter("ServiceBusConnectionString", ConnectionString)
+            .AddParameter("Message", messages);
+
+        if (perSessionThreadAuto)
+        {
+            ps.AddParameter("PerSessionThreadAuto", true);
+        }
+
+        if (perSessionThread > 0)
+        {
+            ps.AddParameter("PerSessionThread", perSessionThread);
+        }
+
+        ps.Invoke();
+        EnsureNoErrors(ps);
+    }
+
+    public void SendToTopic(string topic, PSMessage[] messages)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Send-SBMessage")
+            .AddParameter("Topic", topic)
+            .AddParameter("ServiceBusConnectionString", ConnectionString)
+            .AddParameter("Message", messages)
+            .Invoke();
+        EnsureNoErrors(ps);
+    }
+
+    public ServiceBusReceivedMessage[] ReceiveFromQueue(string queue, int maxMessages, int batchSize = 10, int waitSeconds = 5)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Receive-SBMessage")
+            .AddParameter("Queue", queue)
+            .AddParameter("ServiceBusConnectionString", ConnectionString)
+            .AddParameter("MaxMessages", maxMessages)
+            .AddParameter("BatchSize", batchSize)
+            .AddParameter("WaitSeconds", waitSeconds);
+
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        EnsureNoErrors(ps);
+        return result.ToArray();
+    }
+
+    public ServiceBusReceivedMessage[] ReceiveFromSubscription(string topic, string subscription, int maxMessages)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Receive-SBMessage")
+            .AddParameter("Topic", topic)
+            .AddParameter("Subscription", subscription)
+            .AddParameter("ServiceBusConnectionString", ConnectionString)
+            .AddParameter("MaxMessages", maxMessages);
+
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        EnsureNoErrors(ps);
+        return result.ToArray();
+    }
+
+    public void ClearQueue(string queue)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Clear-SBQueue")
+            .AddParameter("Queue", queue)
+            .AddParameter("ServiceBusConnectionString", ConnectionString)
+            .Invoke();
+        EnsureNoErrors(ps);
+    }
+
+    public void ClearSubscription(string topic, string subscription)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Clear-SBSubscription")
+            .AddParameter("Topic", topic)
+            .AddParameter("Subscription", subscription)
+            .AddParameter("ServiceBusConnectionString", ConnectionString)
+            .Invoke();
+        EnsureNoErrors(ps);
+    }
+
+    private static void EnsureNoErrors(PowerShell ps)
+    {
+        if (!ps.HadErrors)
+        {
+            return;
+        }
+
+        var errors = ps.Streams.Error.Select(e => e.ToString()).ToArray();
+        throw new Xunit.Sdk.XunitException(string.Join(Environment.NewLine, errors));
+    }
+
+    private Task ClearQueuesAndSubscriptions()
+    {
+        ClearQueue("test-queue");
+        ClearQueue("session-queue");
+        ClearSubscription("test-topic", "test-sub");
+        return Task.CompletedTask;
+    }
+
+    private async Task WaitForEmulatorAsync(TimeSpan timeout)
+    {
+        var sw = Stopwatch.StartNew();
+        while (sw.Elapsed < timeout)
+        {
+            var httpOk = await CheckHttpAsync();
+            var tcpOk = await CheckTcpAsync();
+
+            if (httpOk && tcpOk)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+        }
+
+        throw new TimeoutException("Service Bus emulator not ready within timeout.");
+    }
+
+    private async Task<bool> CheckHttpAsync()
+    {
+        try
+        {
+            var resp = await _httpClient.GetAsync($"http://{EmulatorHost}:{HttpPort}/health");
+            return resp.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<bool> CheckTcpAsync()
+    {
+        try
+        {
+            using var client = new TcpClient();
+            var connectTask = client.ConnectAsync(EmulatorHost, AmqpPort);
+            var completed = await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(2)));
+            return completed == connectTask && client.Connected;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private string GetEnvValueOrDefault(string key, string defaultValue)
+    {
+        var value = GetEnvValue(key);
+        return string.IsNullOrWhiteSpace(value) ? defaultValue : value!;
+    }
+
+    private string? GetEnvValue(string key)
+    {
+        if (_env.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        return null;
+    }
+
+    private static Dictionary<string, string> LoadEnv(string path)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!File.Exists(path))
+        {
+            return dict;
+        }
+
+        foreach (var line in File.ReadAllLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var parts = line.Split('=', 2);
+            if (parts.Length == 2)
+            {
+                dict[parts[0].Trim()] = parts[1].Trim();
+            }
+        }
+
+        return dict;
+    }
+
+    private static string LocateRepoRoot()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            if (File.Exists(Path.Combine(dir, "pubs.sln")))
+            {
+                return dir;
+            }
+
+            dir = Directory.GetParent(dir)?.FullName ?? string.Empty;
+        }
+
+        throw new InvalidOperationException("Unable to locate repository root.");
+    }
+}
+
+[CollectionDefinition("SBPowerShellIntegration")]
+public sealed class ServiceBusCollection : ICollectionFixture<ServiceBusFixture>
+{
+}
+
+[Collection("SBPowerShellIntegration")]
+public class PowerShellCmdletTests
+{
+    private readonly ServiceBusFixture _fixture;
+
+    public PowerShellCmdletTests(ServiceBusFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    [Fact]
+    public void Sends_and_receives_non_session_queue_messages()
+    {
+        _fixture.ClearQueue("test-queue");
+
+        var messages = _fixture.NewMessages(null, new[] { "hello", "world" }, new Dictionary<string, object> { ["prop"] = "v1" });
+        _fixture.SendToQueue("test-queue", messages);
+
+        var received = _fixture.ReceiveFromQueue("test-queue", maxMessages: 2);
+        Assert.Equal(2, received.Length);
+        Assert.All(received.Select(m => m.ApplicationProperties["prop"]), v => Assert.Equal("v1", v));
+
+        var bodies = received.Select(m => m.Body.ToString()).ToArray();
+        Assert.Contains("hello", bodies);
+        Assert.Contains("world", bodies);
+    }
+
+    [Fact]
+    public void Sends_and_receives_session_queue_messages_preserving_SessionId()
+    {
+        _fixture.ClearQueue("session-queue");
+
+        var messages = _fixture.NewMessages("sess-1", new[] { "s1", "s2" });
+        _fixture.SendToQueue("session-queue", messages, perSessionThreadAuto: true);
+
+        var received = _fixture.ReceiveFromQueue("session-queue", maxMessages: 2);
+        Assert.Equal(2, received.Length);
+        Assert.All(received, m => Assert.Equal("sess-1", m.SessionId));
+    }
+
+    [Fact]
+    public void Sends_to_topic_and_receives_from_subscription()
+    {
+        _fixture.ClearSubscription("test-topic", "test-sub");
+
+        var messages = _fixture.NewMessages(null, new[] { "topic-msg" });
+        _fixture.SendToTopic("test-topic", messages);
+
+        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 1);
+        Assert.Single(received);
+        Assert.Equal("topic-msg", received[0].Body.ToString());
+    }
+
+    [Fact]
+    public void Sends_multiple_sessions_in_parallel_when_PerSessionThreadAuto_is_set()
+    {
+        _fixture.ClearQueue("session-queue");
+
+        var sessionA = "auto-sess-a";
+        var sessionB = "auto-sess-b";
+        var msgA = _fixture.NewMessages(sessionA, new[] { "a1", "a2", "a3", "a4", "a5" });
+        var msgB = _fixture.NewMessages(sessionB, new[] { "b1", "b2", "b3", "b4", "b5" });
+
+        _fixture.SendToQueue("session-queue", msgA.Concat(msgB).ToArray(), perSessionThreadAuto: true);
+
+        var received = _fixture.ReceiveFromQueue("session-queue", maxMessages: 10, batchSize: 10, waitSeconds: 2);
+        Assert.Equal(10, received.Length);
+
+        var bySession = received.GroupBy(m => m.SessionId).ToDictionary(g => g.Key!, g => g.ToList());
+        Assert.Equal(2, bySession.Count);
+        Assert.Equal(5, bySession[sessionA].Count);
+        Assert.Equal(5, bySession[sessionB].Count);
+    }
+
+    [Fact]
+    public void Uses_multiple_sender_threads_when_PerSessionThread_is_specified()
+    {
+        _fixture.ClearQueue("session-queue");
+
+        var sessionId = "parallel-sess";
+        var payloads = Enumerable.Range(1, 16).Select(i => $"p{i}").ToArray();
+        var messages = _fixture.NewMessages(sessionId, payloads);
+
+        _fixture.SendToQueue("session-queue", messages, perSessionThread: 4);
+
+        var received = _fixture.ReceiveFromQueue("session-queue", maxMessages: 16, batchSize: 8, waitSeconds: 2);
+        Assert.Equal(16, received.Length);
+        Assert.All(received, m => Assert.Equal(sessionId, m.SessionId));
+
+        var receivedBodies = received.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
+        var expected = payloads.OrderBy(x => x).ToArray();
+        Assert.Equal(expected, receivedBodies);
+    }
+}

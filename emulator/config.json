@@ -1,0 +1,66 @@
+{
+  "UserConfig": {
+    "Logging": {
+      "Type": "Console"
+    },
+    "Namespaces": [
+      {
+        "Name": "sbemulatorns",
+        "Queues": [
+          {
+            "Name": "test-queue",
+            "Properties": {
+              "DeadLetteringOnMessageExpiration": false,
+              "DefaultMessageTimeToLive": "PT1H",
+              "DuplicateDetectionHistoryTimeWindow": "PT20S",
+              "ForwardDeadLetteredMessagesTo": "",
+              "ForwardTo": "",
+              "LockDuration": "PT1M",
+              "MaxDeliveryCount": 10,
+              "RequiresDuplicateDetection": false,
+              "RequiresSession": false
+            }
+          },
+          {
+            "Name": "session-queue",
+            "Properties": {
+              "DeadLetteringOnMessageExpiration": false,
+              "DefaultMessageTimeToLive": "PT1H",
+              "DuplicateDetectionHistoryTimeWindow": "PT20S",
+              "ForwardDeadLetteredMessagesTo": "",
+              "ForwardTo": "",
+              "LockDuration": "PT1M",
+              "MaxDeliveryCount": 10,
+              "RequiresDuplicateDetection": false,
+              "RequiresSession": true
+            }
+          }
+        ],
+        "Topics": [
+          {
+            "Name": "test-topic",
+            "Properties": {
+              "DefaultMessageTimeToLive": "PT1H",
+              "RequiresDuplicateDetection": false,
+              "DuplicateDetectionHistoryTimeWindow": "PT20S"
+            },
+            "Subscriptions": [
+              {
+                "Name": "test-sub",
+                "Properties": {
+                  "DeadLetteringOnMessageExpiration": false,
+                  "DefaultMessageTimeToLive": "PT1H",
+                  "LockDuration": "PT1M",
+                  "RequiresSession": false,
+                  "ForwardTo": "",
+                  "ForwardDeadLetteredMessagesTo": "",
+                  "MaxDeliveryCount": 10
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
