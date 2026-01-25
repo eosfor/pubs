@@ -35,6 +35,17 @@ jobs:
         run: |
           docker compose -f docker-compose.sbus.yml up -d
 
+      - name: Write .env for tests
+        run: |
+          cat > .env <<'EOF'
+SAS_KEY_VALUE=${SAS_KEY_VALUE}
+EMULATOR_HOST=localhost
+EMULATOR_HTTP_PORT=${EMULATOR_HTTP_PORT}
+EMULATOR_AMQP_PORT=5672
+EOF
+          echo "Wrote .env:"
+          cat .env
+
       - name: Wait for emulator health
         run: |
           for i in {1..60}; do
