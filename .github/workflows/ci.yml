@@ -38,11 +38,11 @@ jobs:
       - name: Write .env for tests
         run: |
           cat > .env <<EOF
-SAS_KEY_VALUE=${{ env.SAS_KEY_VALUE }}
-EMULATOR_HOST=localhost
-EMULATOR_HTTP_PORT=${{ env.EMULATOR_HTTP_PORT }}
-EMULATOR_AMQP_PORT=5672
-EOF
+          SAS_KEY_VALUE=${{ env.SAS_KEY_VALUE }}
+          EMULATOR_HOST=localhost
+          EMULATOR_HTTP_PORT=${{ env.EMULATOR_HTTP_PORT }}
+          EMULATOR_AMQP_PORT=5672
+          EOF
           echo "Wrote .env:"
           cat .env
 
