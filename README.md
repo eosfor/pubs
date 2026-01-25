@@ -1,4 +1,4 @@
-# pubs
+# pubs ![CI](https://github.com/eosfor/pubs/actions/workflows/ci.yml/badge.svg)
 
 PowerShell‑модуль для работы с Azure Service Bus и локальным Service Bus Emulator.
 
