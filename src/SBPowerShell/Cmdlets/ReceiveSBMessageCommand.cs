@@ -43,6 +43,9 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
     [ValidateRange(1, 300)]
     public int WaitSeconds { get; set; } = 5;
 
+    [Parameter]
+    public SwitchParameter Peek { get; set; }
+
     protected override void EndProcessing()
     {
         try
@@ -79,24 +82,31 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
                 }
                 catch (InvalidOperationException)
                 {
-                    ReceiveFromSessions(client, cancellationToken);
+                    ReceiveFromSessions(client, Peek, cancellationToken);
                     return;
                 }
 
                 try
                 {
-                    ReceiveFromReceiver(receiver, cancellationToken);
+                    ReceiveFromReceiver(receiver, Peek, cancellationToken);
                 }
                 catch (InvalidOperationException)
                 {
                     // Queue requires sessions; fall back.
-                    ReceiveFromSessions(client, cancellationToken);
+                    ReceiveFromSessions(client, Peek, cancellationToken);
                 }
                 return;
             }
 
-            var subscriptionReceiver = client.CreateReceiver(Topic, Subscription);
-            ReceiveFromReceiver(subscriptionReceiver, cancellationToken);
+            try
+            {
+                var subscriptionReceiver = client.CreateReceiver(Topic, Subscription);
+                ReceiveFromReceiver(subscriptionReceiver, Peek, cancellationToken);
+            }
+            catch (InvalidOperationException)
+            {
+                ReceiveFromSubscriptionSessions(client, Peek, cancellationToken);
+            }
         }
         finally
         {
@@ -104,7 +114,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveFromReceiver(ServiceBusReceiver receiver, CancellationToken cancellationToken)
+    private void ReceiveFromReceiver(ServiceBusReceiver receiver, bool peek, CancellationToken cancellationToken)
     {
         try
         {
@@ -112,29 +122,55 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var messages = receiver.ReceiveMessagesAsync(
-                        BatchSize,
-                        TimeSpan.FromSeconds(WaitSeconds),
-                        cancellationToken)
-                    .GetAwaiter()
-                    .GetResult();
+                IReadOnlyList<ServiceBusReceivedMessage> messages;
+
+                if (peek)
+                {
+                    messages = receiver.PeekMessagesAsync(
+                            BatchSize,
+                            cancellationToken: cancellationToken)
+                        .GetAwaiter()
+                        .GetResult();
+                }
+                else
+                {
+                    messages = receiver.ReceiveMessagesAsync(
+                            BatchSize,
+                            TimeSpan.FromSeconds(WaitSeconds),
+                            cancellationToken)
+                        .GetAwaiter()
+                        .GetResult();
+                }
 
                 if (messages.Count == 0)
                 {
-                    if (MaxMessages > 0 && remaining <= 0)
+                    if (!peek)
                     {
-                        break;
+                        if (MaxMessages > 0 && remaining <= 0)
+                        {
+                            break;
+                        }
+
+                        continue;
                     }
 
+                    // In peek mode there is no server wait; throttle polling.
+                    Task.Delay(TimeSpan.FromSeconds(WaitSeconds), cancellationToken)
+                        .GetAwaiter()
+                        .GetResult();
                     continue;
                 }
 
                 foreach (var message in messages)
                 {
                     WriteObject(message);
-                    receiver.CompleteMessageAsync(message, cancellationToken)
-                        .GetAwaiter()
-                        .GetResult();
+
+                    if (!peek)
+                    {
+                        receiver.CompleteMessageAsync(message, cancellationToken)
+                            .GetAwaiter()
+                            .GetResult();
+                    }
 
                     if (MaxMessages > 0)
                     {
@@ -153,7 +189,100 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveFromSessions(ServiceBusClient client, CancellationToken cancellationToken)
+    private void ReceiveFromSubscriptionSessions(ServiceBusClient client, bool peek, CancellationToken cancellationToken)
+    {
+        var remaining = MaxMessages;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(WaitSeconds));
+
+            ServiceBusSessionReceiver? sessionReceiver;
+            try
+            {
+                sessionReceiver = client.AcceptNextSessionAsync(Topic, Subscription, cancellationToken: cts.Token)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (TaskCanceledException)
+            {
+                // No more sessions within wait window.
+                break;
+            }
+
+            if (sessionReceiver is null)
+            {
+                break;
+            }
+
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    IReadOnlyList<ServiceBusReceivedMessage> messages;
+
+                    if (peek)
+                    {
+                        messages = sessionReceiver.PeekMessagesAsync(
+                                BatchSize,
+                                cancellationToken: cancellationToken)
+                            .GetAwaiter()
+                            .GetResult();
+                    }
+                    else
+                    {
+                        messages = sessionReceiver.ReceiveMessagesAsync(
+                                BatchSize,
+                                TimeSpan.FromSeconds(WaitSeconds),
+                                cancellationToken)
+                            .GetAwaiter()
+                            .GetResult();
+                    }
+
+                    if (messages.Count == 0)
+                    {
+                        if (peek)
+                        {
+                            Task.Delay(TimeSpan.FromSeconds(WaitSeconds), cancellationToken)
+                                .GetAwaiter()
+                                .GetResult();
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+
+                    foreach (var message in messages)
+                    {
+                        WriteObject(message);
+
+                        if (!peek)
+                        {
+                            sessionReceiver.CompleteMessageAsync(message, cancellationToken)
+                                .GetAwaiter()
+                                .GetResult();
+                        }
+
+                        if (MaxMessages > 0)
+                        {
+                            remaining--;
+                            if (remaining <= 0)
+                            {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                sessionReceiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        }
+    }
+
+    private void ReceiveFromSessions(ServiceBusClient client, bool peek, CancellationToken cancellationToken)
     {
         var remaining = MaxMessages;
 
@@ -183,24 +312,50 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    var messages = sessionReceiver.ReceiveMessagesAsync(
-                            BatchSize,
-                            TimeSpan.FromSeconds(WaitSeconds),
-                            cancellationToken)
-                        .GetAwaiter()
-                        .GetResult();
+                    IReadOnlyList<ServiceBusReceivedMessage> messages;
+
+                    if (peek)
+                    {
+                        messages = sessionReceiver.PeekMessagesAsync(
+                                BatchSize,
+                                cancellationToken: cancellationToken)
+                            .GetAwaiter()
+                            .GetResult();
+                    }
+                    else
+                    {
+                        messages = sessionReceiver.ReceiveMessagesAsync(
+                                BatchSize,
+                                TimeSpan.FromSeconds(WaitSeconds),
+                                cancellationToken)
+                            .GetAwaiter()
+                            .GetResult();
+                    }
 
                     if (messages.Count == 0)
                     {
-                        break;
+                        if (peek)
+                        {
+                            Task.Delay(TimeSpan.FromSeconds(WaitSeconds), cancellationToken)
+                                .GetAwaiter()
+                                .GetResult();
+                        }
+                        else
+                        {
+                            break;
+                        }
                     }
 
                     foreach (var message in messages)
                     {
                         WriteObject(message);
-                        sessionReceiver.CompleteMessageAsync(message, cancellationToken)
-                            .GetAwaiter()
-                            .GetResult();
+
+                        if (!peek)
+                        {
+                            sessionReceiver.CompleteMessageAsync(message, cancellationToken)
+                                .GetAwaiter()
+                                .GetResult();
+                        }
 
                         if (MaxMessages > 0)
                         {

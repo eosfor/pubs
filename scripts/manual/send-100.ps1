@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-# Loads connection settings from .env and sends 100 messages to test-queue.
+# Loads connection settings from .env and sends 100 messages to test-topic (subscription test-sub).
 
 function Get-EnvValue([string]$Key, [string]$Default = $null) {
     $envPath = Join-Path (Get-Location) '.env'
@@ -44,6 +44,6 @@ $connectionString = Get-ConnectionString
 
 $messages = New-SBMessage -Body (1..100 | ForEach-Object { "msg$($_)" }) -CustomProperties @{ source = 'manual-send' }
 
-Write-Host "Sending 100 messages to test-queue..."
-Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $connectionString
+Write-Host "Sending 100 messages to test-topic..."
+Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $connectionString
 Write-Host "Done."

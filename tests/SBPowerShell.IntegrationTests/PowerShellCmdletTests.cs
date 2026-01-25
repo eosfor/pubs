@@ -52,6 +52,7 @@ public class ServiceBusFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        EnsureEmulatorUp();
         await WaitForEmulatorAsync(TimeSpan.FromSeconds(90));
         await ClearQueuesAndSubscriptions();
     }
@@ -118,18 +119,24 @@ public class ServiceBusFixture : IAsyncLifetime
         EnsureNoErrors(ps);
     }
 
-    public void SendToTopic(string topic, PSMessage[] messages)
+    public void SendToTopic(string topic, PSMessage[] messages, bool perSessionThreadAuto = false)
     {
         using var ps = CreateShell();
         ps.AddCommand("Send-SBMessage")
             .AddParameter("Topic", topic)
             .AddParameter("ServiceBusConnectionString", ConnectionString)
-            .AddParameter("Message", messages)
-            .Invoke();
+            .AddParameter("Message", messages);
+
+        if (perSessionThreadAuto)
+        {
+            ps.AddParameter("PerSessionThreadAuto", true);
+        }
+
+        ps.Invoke();
         EnsureNoErrors(ps);
     }
 
-    public ServiceBusReceivedMessage[] ReceiveFromQueue(string queue, int maxMessages, int batchSize = 10, int waitSeconds = 5)
+    public ServiceBusReceivedMessage[] ReceiveFromQueue(string queue, int maxMessages, int batchSize = 10, int waitSeconds = 5, bool peek = false)
     {
         using var ps = CreateShell();
         ps.AddCommand("Receive-SBMessage")
@@ -139,19 +146,30 @@ public class ServiceBusFixture : IAsyncLifetime
             .AddParameter("BatchSize", batchSize)
             .AddParameter("WaitSeconds", waitSeconds);
 
+        if (peek)
+        {
+            ps.AddParameter("Peek", true);
+        }
+
         var result = ps.Invoke<ServiceBusReceivedMessage>();
         EnsureNoErrors(ps);
         return result.ToArray();
     }
 
-    public ServiceBusReceivedMessage[] ReceiveFromSubscription(string topic, string subscription, int maxMessages)
+    public ServiceBusReceivedMessage[] ReceiveFromSubscription(string topic, string subscription, int maxMessages, int waitSeconds = 5, bool peek = false)
     {
         using var ps = CreateShell();
         ps.AddCommand("Receive-SBMessage")
             .AddParameter("Topic", topic)
             .AddParameter("Subscription", subscription)
             .AddParameter("ServiceBusConnectionString", ConnectionString)
-            .AddParameter("MaxMessages", maxMessages);
+            .AddParameter("MaxMessages", maxMessages)
+            .AddParameter("WaitSeconds", waitSeconds);
+
+        if (peek)
+        {
+            ps.AddParameter("Peek", true);
+        }
 
         var result = ps.Invoke<ServiceBusReceivedMessage>();
         EnsureNoErrors(ps);
@@ -195,7 +213,28 @@ public class ServiceBusFixture : IAsyncLifetime
         ClearQueue("test-queue");
         ClearQueue("session-queue");
         ClearSubscription("test-topic", "test-sub");
+        ClearSubscription("session-topic", "session-sub");
         return Task.CompletedTask;
+    }
+
+    private void EnsureEmulatorUp()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = $@"compose -f ""{Path.Combine(RepoRoot, "docker-compose.sbus.yml")}"" up -d --force-recreate",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using var proc = Process.Start(psi);
+            proc?.WaitForExit(30000);
+        }
+        catch
+        {
+            // best-effort; emulator might already be running
+        }
     }
 
     private async Task WaitForEmulatorAsync(TimeSpan timeout)
@@ -336,6 +375,25 @@ public class PowerShellCmdletTests
     }
 
     [Fact]
+    public void Peek_does_not_remove_messages()
+    {
+        _fixture.ClearQueue("test-queue");
+
+        var messages = _fixture.NewMessages(null, new[] { "peek-1", "peek-2" });
+        _fixture.SendToQueue("test-queue", messages);
+
+        var peeked = _fixture.ReceiveFromQueue("test-queue", maxMessages: 2, waitSeconds: 1, peek: true);
+        Assert.Equal(2, peeked.Length);
+
+        var received = _fixture.ReceiveFromQueue("test-queue", maxMessages: 2, waitSeconds: 1, peek: false);
+        Assert.Equal(2, received.Length);
+
+        var peekBodies = peeked.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
+        var recvBodies = received.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
+        Assert.Equal(peekBodies, recvBodies);
+    }
+
+    [Fact]
     public void Sends_and_receives_session_queue_messages_preserving_SessionId()
     {
         _fixture.ClearQueue("session-queue");
@@ -359,6 +417,53 @@ public class PowerShellCmdletTests
         var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 1);
         Assert.Single(received);
         Assert.Equal("topic-msg", received[0].Body.ToString());
+    }
+
+    [Fact]
+    public void Sends_and_receives_session_topic_messages_preserving_SessionId()
+    {
+        _fixture.ClearSubscription("session-topic", "session-sub");
+
+        var messages = _fixture.NewMessages("sess-topic", new[] { "ts1", "ts2" });
+        _fixture.SendToTopic("session-topic", messages, perSessionThreadAuto: true);
+
+        var received = _fixture.ReceiveFromSubscription("session-topic", "session-sub", maxMessages: 2);
+        Assert.Equal(2, received.Length);
+        Assert.All(received, m => Assert.Equal("sess-topic", m.SessionId));
+    }
+
+    [Fact]
+    public void Receives_multiple_messages_from_subscription()
+    {
+        _fixture.ClearSubscription("test-topic", "test-sub");
+
+        var messages = _fixture.NewMessages(null, new[] { "sub-1", "sub-2" });
+        _fixture.SendToTopic("test-topic", messages);
+
+        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2, waitSeconds: 1);
+        Assert.Equal(2, received.Length);
+
+        var bodies = received.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
+        Assert.Equal(new[] { "sub-1", "sub-2" }, bodies);
+    }
+
+    [Fact]
+    public void Peek_from_subscription_does_not_remove_messages()
+    {
+        _fixture.ClearSubscription("test-topic", "test-sub");
+
+        var messages = _fixture.NewMessages(null, new[] { "peek-topic-1", "peek-topic-2" });
+        _fixture.SendToTopic("test-topic", messages);
+
+        var peeked = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2, waitSeconds: 1, peek: true);
+        Assert.Equal(2, peeked.Length);
+
+        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2, waitSeconds: 1, peek: false);
+        Assert.Equal(2, received.Length);
+
+        Assert.Equal(
+            peeked.Select(m => m.Body.ToString()).OrderBy(x => x),
+            received.Select(m => m.Body.ToString()).OrderBy(x => x));
     }
 
     [Fact]

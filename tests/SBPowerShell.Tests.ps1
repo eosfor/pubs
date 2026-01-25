@@ -82,6 +82,48 @@ function script:Wait-ForEmulator {
     throw "Emulator not ready after $TimeoutSeconds seconds."
 }
 
+function script:Ensure-TopicSubscription {
+    param(
+        [Parameter(Mandatory)][string]$Topic,
+        [Parameter(Mandatory)][string]$Subscription,
+        [bool]$RequiresSession = $false
+    )
+
+    try {
+        $admin = [Azure.Messaging.ServiceBus.Administration.ServiceBusAdministrationClient]::new($script:connectionString)
+
+        if (-not ($admin.TopicExistsAsync($Topic).GetAwaiter().GetResult())) {
+            $admin.CreateTopicAsync($Topic).GetAwaiter().GetResult() | Out-Null
+        }
+
+        if (-not ($admin.SubscriptionExistsAsync($Topic, $Subscription).GetAwaiter().GetResult())) {
+            $options = [Azure.Messaging.ServiceBus.Administration.CreateSubscriptionOptions]::new($Topic, $Subscription)
+            $options.RequiresSession = $RequiresSession
+            $admin.CreateSubscriptionAsync($options).GetAwaiter().GetResult() | Out-Null
+        }
+    }
+    catch {
+        Write-Warning "Ensure-TopicSubscription skipped: $($_.Exception.Message)"
+    }
+}
+
+function script:Ensure-EmulatorUp {
+    $root = if ($script:repoRoot) { $script:repoRoot } else { (Get-Location).Path }
+    $compose = Join-Path $root 'docker-compose.sbus.yml'
+    if (-not (Test-Path $compose)) {
+        Write-Warning "docker-compose.sbus.yml not found at $compose"
+        return
+    }
+
+    try {
+        Write-Host "Starting/recreating Service Bus emulator containers..."
+        docker compose -f $compose up -d --force-recreate --pull never | Out-Null
+    }
+    catch {
+        Write-Warning "docker compose up failed: $($_.Exception.Message)"
+    }
+}
+
 $connectionString = Get-ConnectionString
 Write-Host "sasKey from env=$(Get-EnvValue 'SAS_KEY_VALUE')"
 Write-Host "connectionString=$connectionString"
@@ -94,10 +136,14 @@ Describe "SBPowerShell cmdlets against emulator" {
         $sbHost = Get-EnvValueOrDefault 'EMULATOR_HOST' 'localhost'
         $amqpPort = [int](Get-EnvValueOrDefault 'EMULATOR_AMQP_PORT' '5672')
         $httpPort = [int](Get-EnvValueOrDefault 'EMULATOR_HTTP_PORT' '5300')
+        Ensure-EmulatorUp
         Wait-ForEmulator -EmulatorHost $sbHost -AmqpPort $amqpPort -HttpPort $httpPort -TimeoutSeconds 90
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
         Clear-SBQueue -Queue 'session-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Ensure-TopicSubscription -Topic 'test-topic' -Subscription 'test-sub' -RequiresSession:$false
+        Ensure-TopicSubscription -Topic 'session-topic' -Subscription 'session-sub' -RequiresSession:$true
         Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Clear-SBSubscription -Topic 'session-topic' -Subscription 'session-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
     }
 
     It "sends and receives non-session queue messages" {
@@ -126,6 +172,58 @@ Describe "SBPowerShell cmdlets against emulator" {
         $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1)
         $received.Count | Should -Be 1
         $received[0].Body.ToString() | Should -Be 'topic-msg'
+    }
+
+    It "sends and receives session topic messages preserving SessionId" {
+        Clear-SBSubscription -Topic 'session-topic' -Subscription 'session-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -SessionId 'sess-topic' -Body 'ts1','ts2'
+        Send-SBMessage -Topic 'session-topic' -Message $messages -ServiceBusConnectionString $script:connectionString -PerSessionThreadAuto
+
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'session-topic' -Subscription 'session-sub' -MaxMessages 2)
+        $received.Count | Should -Be 2
+        $received | ForEach-Object { $_.SessionId | Should -Be 'sess-topic' }
+    }
+
+    It "receives multiple messages from subscription" {
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 't-m1','t-m2'
+        Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2 -WaitSeconds 1)
+        $received.Count | Should -Be 2
+        ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('t-m1','t-m2')
+    }
+
+    It "peeks subscription messages without removing them" {
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'peek-topic-a','peek-topic-b'
+        Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $peeked = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2 -Peek -WaitSeconds 1)
+        $peeked.Count | Should -Be 2
+
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2 -WaitSeconds 1)
+        $received.Count | Should -Be 2
+
+        ($peeked | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object)
+    }
+
+    It "peeks messages without removing them" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'peek-one', 'peek-two'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $peeked = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 2 -Peek -WaitSeconds 1)
+        $peeked.Count | Should -Be 2
+        ($peeked | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('peek-one','peek-two')
+
+        $received = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 2 -WaitSeconds 1)
+        $received.Count | Should -Be 2
+        ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('peek-one','peek-two')
     }
 
     It "sends multiple sessions in parallel when PerSessionThreadAuto is set" {

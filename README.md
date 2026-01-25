@@ -5,7 +5,7 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 ## Что умеет
 - `New-SBMessage` — создать шаблон(ы) сообщений с SessionId и application properties.
 - `Send-SBMessage` — отправка в очередь или топик, поддерживает параллельную отправку по сессиям (`-PerSessionThreadAuto` или `-PerSessionThread`).
-- `Receive-SBMessage` — чтение из очереди или подписки; автоматически переключается на session receiver, если сущность требует сессии.
+- `Receive-SBMessage` — чтение из очереди или подписки; поддерживает peek (`-Peek`) без удаления; автоматически переключается на session receiver, если сущность требует сессии.
 - `Clear-SBQueue`, `Clear-SBSubscription` — очистка очереди или подписки пакетами.
 
 ## Требования
@@ -40,7 +40,15 @@ $conn = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;S
 $messages = New-SBMessage -Body "hello","world" -CustomProperties @{ prop="v1" }
 Send-SBMessage -Queue "test-queue" -Message $messages -ServiceBusConnectionString $conn
 Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 2
+
+# Топик/подписка
+$topicMsgs = New-SBMessage -Body "t1","t2"
+Send-SBMessage -Topic "test-topic" -Message $topicMsgs -ServiceBusConnectionString $conn
+Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnectionString $conn -MaxMessages 2
 ```
+
+- Для топика указывайте `-Topic` при отправке и пару `-Topic` + `-Subscription` при получении. Для очереди достаточно `-Queue`.
+- `-Subscription` требуется только при чтении из топика; для очереди этот параметр не используется.
 
 Отправка по сессиям с автопараллелизмом:
 ```pwsh
@@ -48,6 +56,19 @@ $s1 = New-SBMessage -SessionId "sess-1" -Body "a1","a2","a3"
 $s2 = New-SBMessage -SessionId "sess-2" -Body "b1","b2","b3"
 Send-SBMessage -Queue "session-queue" -Message ($s1 + $s2) -ServiceBusConnectionString $conn -PerSessionThreadAuto
 Receive-SBMessage -Queue "session-queue" -ServiceBusConnectionString $conn -MaxMessages 6
+
+# Аналог для топика/подписки с сессионной сущностью:
+# Send-SBMessage -Topic "session-topic" -Message ($s1 + $s2) -ServiceBusConnectionString $conn -PerSessionThreadAuto
+# Receive-SBMessage -Topic "session-topic" -Subscription "session-sub" -ServiceBusConnectionString $conn -MaxMessages 6
+```
+
+Просмотр (peek) без удаления:
+```pwsh
+$peeked = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek -WaitSeconds 1
+# сообщения остаются в очереди и могут быть получены позже обычным вызовом
+
+# Для топика:
+# $peeked = Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek -WaitSeconds 1
 ```
 
 ## Тесты
@@ -55,8 +76,8 @@ Receive-SBMessage -Queue "session-queue" -ServiceBusConnectionString $conn -MaxM
 - C# xUnit интеграционные: `dotnet test tests/SBPowerShell.IntegrationTests/SBPowerShell.IntegrationTests.csproj` (тоже требует работающего эмулятора и .env).
 
 ## Ручные проверки
-- `scripts/manual/send-100.ps1` — отправляет 100 сообщений `msg1..msg100` в `test-queue`.
-- `scripts/manual/receive-100.ps1` — принимает до 100 сообщений из `test-queue` и выводит краткую сводку объектов.
+- `scripts/manual/send-100.ps1` — отправляет 100 сообщений `msg1..msg100` в топик `test-topic`.
+- `scripts/manual/receive-100.ps1` — принимает до 100 сообщений из подписки `test-topic` / `test-sub` и выводит краткую сводку объектов.
 
 Запуск:
 ```pwsh

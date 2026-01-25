@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-# Receives up to 100 messages from test-queue and writes them to console.
+# Receives up to 100 messages from test-topic/test-sub subscription and writes them to console.
 
 function Get-EnvValue([string]$Key, [string]$Default = $null) {
     $envPath = Join-Path (Get-Location) '.env'
@@ -42,8 +42,8 @@ if (-not (Test-Path $modulePath)) {
 Import-Module $modulePath -Force
 $connectionString = Get-ConnectionString
 
-Write-Host "Receiving up to 100 messages from test-queue..."
-$received = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $connectionString -MaxMessages 100 -BatchSize 20 -WaitSeconds 2)
+Write-Host "Receiving up to 100 messages from test-topic/test-sub..."
+$received = @(Receive-SBMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $connectionString -MaxMessages 100 -BatchSize 20 -WaitSeconds 2)
 
 Write-Host "Received $($received.Count) message(s):"
 $received | ForEach-Object {
