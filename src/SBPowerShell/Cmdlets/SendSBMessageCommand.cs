@@ -16,8 +16,13 @@ public sealed class SendSBMessageCommand : PSCmdlet
     private readonly List<PSMessage> _messages = new();
     private readonly CancellationTokenSource _cts = new();
 
-    [Parameter(Mandatory = true, ValueFromPipeline = true)]
+    [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetTopic)]
     public PSMessage[]? Message { get; set; }
+
+    [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetTopic)]
+    public ServiceBusReceivedMessage[]? ReceivedInputObject { get; set; }
 
     [Parameter(Mandatory = true)]
     [ValidateNotNullOrEmpty]
@@ -40,12 +45,18 @@ public sealed class SendSBMessageCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        if (Message is null || Message.Length == 0)
+        if (Message is not null && Message.Length > 0)
         {
-            return;
+            _messages.AddRange(Message);
         }
 
-        _messages.AddRange(Message);
+        if (ReceivedInputObject is not null && ReceivedInputObject.Length > 0)
+        {
+            foreach (var received in ReceivedInputObject)
+            {
+                _messages.Add(ConvertFromReceived(received));
+            }
+        }
     }
 
     protected override void EndProcessing()
@@ -73,6 +84,11 @@ public sealed class SendSBMessageCommand : PSCmdlet
     {
         if (_messages.Count == 0)
         {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("No messages provided. Specify -Message or pipe ServiceBusReceivedMessage objects."),
+                "SendSBMessageEmptyInput",
+                ErrorCategory.InvalidData,
+                this));
             return;
         }
 
@@ -227,5 +243,26 @@ public sealed class SendSBMessageCommand : PSCmdlet
         }
 
         return sbMessage;
+    }
+
+    private PSMessage ConvertFromReceived(ServiceBusReceivedMessage received)
+    {
+        var props = new Dictionary<string, object>();
+        foreach (var kv in received.ApplicationProperties)
+        {
+            props[kv.Key] = kv.Value;
+        }
+
+        if (!string.IsNullOrEmpty(received.MessageId))
+        {
+            props["MessageId"] = received.MessageId;
+        }
+
+        var bodyText = received.Body.ToString();
+
+        return new PSMessage(
+            received.SessionId,
+            props,
+            new[] { bodyText });
     }
 }

@@ -49,7 +49,7 @@ function script:Wait-ForEmulator {
         [string]$EmulatorHost,
         [int]$HttpPort = 5300,
         [int]$AmqpPort = 5672,
-        [int]$TimeoutSeconds = 60
+        [int]$TimeoutSeconds = 180
     )
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -57,10 +57,13 @@ function script:Wait-ForEmulator {
 
     while ([DateTime]::UtcNow -lt $deadline) {
         $httpOk = $false
+        $httpErr = $null
         try {
             $resp = Invoke-RestMethod -UseBasicParsing -Method Get -TimeoutSec 5 -Uri ("http://{0}:{1}/health" -f $EmulatorHost, $HttpPort)
             $httpOk = $true
-        } catch {}
+        } catch {
+            $httpErr = $_.Exception.Message
+        }
 
         $tcpOk = $false
         try {
@@ -79,6 +82,7 @@ function script:Wait-ForEmulator {
         Start-Sleep -Seconds 2
     }
 
+    Write-Warning ("Emulator not ready after {0}s; last HTTP error: {1}" -f $TimeoutSeconds, $httpErr)
     throw "Emulator not ready after $TimeoutSeconds seconds."
 }
 
@@ -209,6 +213,21 @@ Describe "SBPowerShell cmdlets against emulator" {
         $received.Count | Should -Be 2
 
         ($peeked | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object)
+    }
+
+    It "pipes received messages into Send-SBMessage" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'pipe-one'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 |
+            Send-SBMessage -Topic 'test-topic' -ServiceBusConnectionString $script:connectionString
+
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1 -WaitSeconds 1)
+        $received.Count | Should -Be 1
+        $received[0].Body.ToString() | Should -Be 'pipe-one'
     }
 
     It "peeks messages without removing them" {

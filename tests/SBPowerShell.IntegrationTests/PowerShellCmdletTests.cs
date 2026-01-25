@@ -53,7 +53,7 @@ public class ServiceBusFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         EnsureEmulatorUp();
-        await WaitForEmulatorAsync(TimeSpan.FromSeconds(90));
+        await WaitForEmulatorAsync(TimeSpan.FromSeconds(180));
         await ClearQueuesAndSubscriptions();
     }
 
@@ -240,6 +240,7 @@ public class ServiceBusFixture : IAsyncLifetime
     private async Task WaitForEmulatorAsync(TimeSpan timeout)
     {
         var sw = Stopwatch.StartNew();
+        string? lastHttpError = null;
         while (sw.Elapsed < timeout)
         {
             var httpOk = await CheckHttpAsync();
@@ -253,7 +254,7 @@ public class ServiceBusFixture : IAsyncLifetime
             await Task.Delay(TimeSpan.FromSeconds(1));
         }
 
-        throw new TimeoutException("Service Bus emulator not ready within timeout.");
+        throw new TimeoutException($"Service Bus emulator not ready within timeout ({timeout.TotalSeconds}s). Last HTTP error: {lastHttpError}");
     }
 
     private async Task<bool> CheckHttpAsync()
@@ -464,6 +465,35 @@ public class PowerShellCmdletTests
         Assert.Equal(
             peeked.Select(m => m.Body.ToString()).OrderBy(x => x),
             received.Select(m => m.Body.ToString()).OrderBy(x => x));
+    }
+
+    [Fact]
+    public void Pipes_received_messages_into_send()
+    {
+        _fixture.ClearQueue("test-queue");
+        _fixture.ClearSubscription("test-topic", "test-sub");
+
+        var messages = _fixture.NewMessages(null, new[] { "pipe-one" });
+        _fixture.SendToQueue("test-queue", messages);
+
+        using (var ps = _fixture.CreateShell())
+        {
+            ps.AddCommand("Receive-SBMessage")
+                .AddParameter("Queue", "test-queue")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("MaxMessages", 1);
+
+            ps.AddCommand("Send-SBMessage")
+                .AddParameter("Topic", "test-topic")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString);
+
+            ps.Invoke();
+            Assert.False(ps.HadErrors);
+        }
+
+        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 1, waitSeconds: 1);
+        Assert.Single(received);
+        Assert.Equal("pipe-one", received[0].Body.ToString());
     }
 
     [Fact]
