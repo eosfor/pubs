@@ -44,6 +44,18 @@ function script:Get-ConnectionString {
     return "Endpoint=sb://${emulatorHost};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=$sas;UseDevelopmentEmulator=true;"
 }
 
+function script:Get-AdminConnectionString([string]$BaseConnectionString) {
+    # The emulator hosts management plane on the HTTP port (default 5300).
+    # The SDK admin client otherwise tries to call port 80 when given the
+    # development connection string, leading to connection-refused warnings.
+    if ($BaseConnectionString -notmatch 'UseDevelopmentEmulator=true') {
+        return $BaseConnectionString
+    }
+
+    $httpPort = [int](Get-EnvValueOrDefault 'EMULATOR_HTTP_PORT' '5300')
+    return ($BaseConnectionString -replace 'Endpoint=sb://([^;]+);', "Endpoint=sb://`$1:$httpPort;")
+}
+
 function script:Wait-ForEmulator {
     param(
         [string]$EmulatorHost,
@@ -94,7 +106,8 @@ function script:Ensure-TopicSubscription {
     )
 
     try {
-        $admin = [Azure.Messaging.ServiceBus.Administration.ServiceBusAdministrationClient]::new($script:connectionString)
+        $adminConn = Get-AdminConnectionString $script:connectionString
+        $admin = [Azure.Messaging.ServiceBus.Administration.ServiceBusAdministrationClient]::new($adminConn)
 
         if (-not ($admin.TopicExistsAsync($Topic).GetAwaiter().GetResult())) {
             $admin.CreateTopicAsync($Topic).GetAwaiter().GetResult() | Out-Null
@@ -135,6 +148,20 @@ Write-Host "connectionStringLength=$($connectionString.Length)"
 
 Describe "SBPowerShell cmdlets against emulator" {
     BeforeAll {
+        if (-not $script:repoRoot) {
+            $script:repoRoot = Split-Path -Parent $PSScriptRoot
+            if (-not $script:repoRoot) { $script:repoRoot = (Get-Location).Path }
+        }
+
+        $script:modulePath = Join-Path $script:repoRoot 'src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1'
+        if (-not (Test-Path $script:modulePath)) {
+            Write-Host "Build Debug first; falling back to Release."
+            $script:modulePath = Join-Path $script:repoRoot 'src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1'
+        }
+        if (-not (Test-Path $script:modulePath)) {
+            throw "Module manifest not found. Run 'dotnet build src/SBPowerShell/SBPowerShell.csproj'."
+        }
+
         $script:connectionString = Get-ConnectionString
         Write-Host "BeforeAll conn length=$($script:connectionString.Length)"
         $sbHost = Get-EnvValueOrDefault 'EMULATOR_HOST' 'localhost'
@@ -213,6 +240,155 @@ Describe "SBPowerShell cmdlets against emulator" {
         $received.Count | Should -Be 2
 
         ($peeked | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object)
+    }
+
+    It "supports NoComplete with manual settle via Set-SBMessage" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        $messages = New-SBMessage -Body 'manual-complete'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete |
+            Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Complete
+
+        $shouldBeEmpty = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $shouldBeEmpty.Count | Should -Be 0
+    }
+
+    It "defers and fetches deferred messages" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        $messages = New-SBMessage -Body 'needs-order'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $deferredSeq = @(
+            Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete |
+            Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Defer |
+            ForEach-Object { $_.SequenceNumber }
+        )
+
+        $fetched = @(Receive-SBDeferredMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -SequenceNumber $deferredSeq)
+        $fetched.Count | Should -Be 1
+        $fetched[0].Body.ToString() | Should -Be 'needs-order'
+
+        $fetched | Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Complete | Out-Null
+    }
+
+    It "orders messages using session context and defer" {
+        Clear-SBQueue -Queue 'session-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Clear-SBSubscription -Topic 'session-topic' -Subscription 'session-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $sid = 'order-sess'
+        $msgs = @()
+        $msgs += New-SBMessage -SessionId $sid -Body 'second' -CustomProperties @{ Order = 2 }
+        $msgs += New-SBMessage -SessionId $sid -Body 'first'  -CustomProperties @{ Order = 1 }
+        $msgs += New-SBMessage -SessionId $sid -Body 'third'  -CustomProperties @{ Order = 3 }
+        Send-SBMessage -Queue 'session-queue' -Message $msgs -ServiceBusConnectionString $script:connectionString -PerSessionThreadAuto
+
+        $ctx = New-SBSessionContext -Queue 'session-queue' -SessionId $sid -ServiceBusConnectionString $script:connectionString
+
+        $state = Get-SBSessionState -SessionContext $ctx
+        if ($state -and $state.PSObject.TypeNames -contains 'System.Text.Json.JsonElement') {
+            $state = [pscustomobject]@{
+                LastMaxOrder = [int]$state.GetProperty('LastMaxOrder').GetInt32()
+                Deferred     = @($state.GetProperty('Deferred') | ForEach-Object { $_.GetInt64() })
+            }
+        }
+        if (-not $state) { $state = [pscustomobject]@{ LastMaxOrder = 0; Deferred = @() } }
+
+        $orderedOut = New-Object System.Collections.Generic.List[object]
+
+        function global:Handle-Ordered {
+            param($m)
+            $expected = $state.LastMaxOrder + 1
+            $orderVal = [int]$m.ApplicationProperties['Order']
+            if ($orderVal -eq $expected) {
+                $state.LastMaxOrder = $orderVal
+                $m | Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+                $orderedOut.Add($m) | Out-Null
+            } else {
+                $m | Set-SBMessage -SessionContext $ctx -Defer | Out-Null
+                $state.Deferred += $m.SequenceNumber
+            }
+        }
+
+        $batch = @(Receive-SBMessage -SessionContext $ctx -MaxMessages 3 -NoComplete)
+        foreach ($m in $batch) { Handle-Ordered $m }
+
+        while ($state.Deferred.Count -gt 0) {
+            $nextSeq = ($state.Deferred | Sort-Object | Select-Object -First 1)
+            $state.Deferred = $state.Deferred | Where-Object { $_ -ne $nextSeq }
+            $deferred = Receive-SBDeferredMessage -SessionContext $ctx -SequenceNumber $nextSeq
+            Handle-Ordered $deferred
+        }
+
+        $stateToSave = @{ LastMaxOrder = $state.LastMaxOrder; Deferred = $state.Deferred } | ConvertTo-Json -Compress
+        Set-SBSessionState -SessionContext $ctx -State $stateToSave
+        Close-SBSessionContext -Context $ctx
+
+        $orderedOut | Send-SBMessage -Topic 'session-topic' -ServiceBusConnectionString $script:connectionString
+
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'session-topic' -Subscription 'session-sub' -MaxMessages 3 -WaitSeconds 2)
+        ($received | ForEach-Object { $_.Body.ToString() }) | Should -Be @('first','second','third')
+        $received | ForEach-Object { $_.SessionId | Should -Be $sid }
+    }
+
+    It "routes unordered non-session stream through pipeline into ordered session topic" {
+        Ensure-TopicSubscription -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -RequiresSession:$false
+        Ensure-TopicSubscription -Topic 'ORDERED_TOPIC' -Subscription 'SESS_SUB' -RequiresSession:$true
+        Clear-SBSubscription -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Clear-SBSubscription -Topic 'ORDERED_TOPIC' -Subscription 'SESS_SUB' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $sid = 'ordered-sess'
+        $total = 3
+
+        $jobModule = $script:modulePath
+        if (-not (Test-Path $jobModule)) { throw "Module path not found: $jobModule" }
+
+        $job = Start-Job -ArgumentList $jobModule, $script:connectionString, $sid -ScriptBlock {
+            param([string]$modulePath, [string]$conn, [string]$sid)
+            if (-not (Test-Path $modulePath)) { throw "modulePath not found: $modulePath" }
+            Import-Module $modulePath -Force
+
+            $msgs = @(
+                New-SBMessage -Body 'second' -CustomProperties @{ sessionId = $sid; order = 2 }
+                New-SBMessage -Body 'first'  -CustomProperties @{ sessionId = $sid; order = 1 }
+                New-SBMessage -Body 'third'  -CustomProperties @{ sessionId = $sid; order = 3 }
+            )
+
+            Send-SBMessage -Topic 'NO_SESSION' -Message $msgs -ServiceBusConnectionString $conn
+        }
+
+        function global:Reorder-And-Forward {
+            [CmdletBinding()]
+            param(
+                [Parameter(ValueFromPipeline)]$Message
+            )
+            begin { $buffer = @() }
+            process { $buffer += $Message }
+            end {
+                $ordered = $buffer | Sort-Object { [int]$_.ApplicationProperties['order'] }
+                foreach ($m in $ordered) {
+                    $sidFromProp = $m.ApplicationProperties['sessionId']
+                    $out = New-SBMessage -SessionId $sidFromProp -Body $m.Body.ToString() -CustomProperties @{
+                        order     = $m.ApplicationProperties['order']
+                        sessionId = $sidFromProp
+                    }
+
+                    $out
+                    # Send-SBMessage -Topic 'ORDERED_TOPIC' -Message $out -ServiceBusConnectionString $script:connectionString
+                }
+            }
+        }
+
+        Wait-Job $job -Timeout 30 | Out-Null
+        Receive-Job $job | Out-Null
+        Remove-Job $job | Out-Null
+
+        Receive-SBMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -MaxMessages $total -WaitSeconds 5 |
+            Reorder-And-Forward | Send-SBMessage -Topic 'ORDERED_TOPIC' -ServiceBusConnectionString $script:connectionString
+
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'ORDERED_TOPIC' -Subscription 'SESS_SUB' -MaxMessages $total -WaitSeconds 5)
+        ($received | ForEach-Object { $_.Body.ToString() }) | Should -Be @('first','second','third')
+        $received | ForEach-Object { $_.SessionId | Should -Be $sid }
     }
 
     It "pipes received messages into Send-SBMessage" {
