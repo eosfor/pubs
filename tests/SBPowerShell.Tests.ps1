@@ -362,19 +362,63 @@ Describe "SBPowerShell cmdlets against emulator" {
             param(
                 [Parameter(ValueFromPipeline)]$Message
             )
-            begin { $buffer = @() }
-            process { $buffer += $Message }
-            end {
-                $ordered = $buffer | Sort-Object { [int]$_.ApplicationProperties['order'] }
-                foreach ($m in $ordered) {
-                    $sidFromProp = $m.ApplicationProperties['sessionId']
+            begin {
+                # state per pseudo-sessionId: LastMaxOrder, Deferred seq numbers
+                $state = @{}
+                function Get-State([string]$sid) {
+                    if (-not $state.ContainsKey($sid)) {
+                        $state[$sid] = [pscustomobject]@{
+                            LastMaxOrder = 0
+                            Deferred     = @()
+                        }
+                    }
+                    return $state[$sid]
+                }
+                function Try-DrainDeferred([string]$sid, $ctxState) {
+                    while ($ctxState.Deferred.Count -gt 0) {
+                        $nextSeq = ($ctxState.Deferred | Sort-Object | Select-Object -First 1)
+                        $ctxState.Deferred = $ctxState.Deferred | Where-Object { $_ -ne $nextSeq }
+                        $deferred = Receive-SBDeferredMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -SequenceNumber $nextSeq
+                        if (-not $deferred) { break }
+
+                        $orderVal = [int]$deferred.ApplicationProperties['order']
+                        $expected = $ctxState.LastMaxOrder + 1
+                        if ($orderVal -eq $expected) {
+                            $deferred | Set-SBMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -Complete | Out-Null
+                            $ctxState.LastMaxOrder = $orderVal
+                            $out = New-SBMessage -SessionId $sid -Body $deferred.Body.ToString() -CustomProperties @{
+                                order     = $orderVal
+                                sessionId = $sid
+                            }
+                            Write-Output $out
+                        } else {
+                            # still out of order; keep deferred
+                            $ctxState.Deferred += $deferred.SequenceNumber
+                            break
+                        }
+                    }
+                }
+            }
+            process {
+                $m = $Message
+                $sidFromProp = $m.ApplicationProperties['sessionId']
+                $ctxState = Get-State $sidFromProp
+
+                $orderVal = [int]$m.ApplicationProperties['order']
+                $expected = $ctxState.LastMaxOrder + 1
+
+                if ($orderVal -eq $expected) {
+                    $m | Set-SBMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -Complete | Out-Null
+                    $ctxState.LastMaxOrder = $orderVal
                     $out = New-SBMessage -SessionId $sidFromProp -Body $m.Body.ToString() -CustomProperties @{
-                        order     = $m.ApplicationProperties['order']
+                        order     = $orderVal
                         sessionId = $sidFromProp
                     }
-
-                    $out
-                    # Send-SBMessage -Topic 'ORDERED_TOPIC' -Message $out -ServiceBusConnectionString $script:connectionString
+                    Write-Output $out
+                    Try-DrainDeferred -sid $sidFromProp -ctxState $ctxState
+                } else {
+                    $m | Set-SBMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -Defer | Out-Null
+                    $ctxState.Deferred += $m.SequenceNumber
                 }
             }
         }
@@ -383,7 +427,7 @@ Describe "SBPowerShell cmdlets against emulator" {
         Receive-Job $job | Out-Null
         Remove-Job $job | Out-Null
 
-        Receive-SBMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -MaxMessages $total -WaitSeconds 5 |
+        Receive-SBMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -MaxMessages $total -WaitSeconds 5 -NoComplete |
             Reorder-And-Forward | Send-SBMessage -Topic 'ORDERED_TOPIC' -ServiceBusConnectionString $script:connectionString
 
         $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'ORDERED_TOPIC' -Subscription 'SESS_SUB' -MaxMessages $total -WaitSeconds 5)
