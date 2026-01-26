@@ -3,6 +3,7 @@ using System.Management.Automation;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using SBPowerShell.Models;
 
 namespace SBPowerShell.Cmdlets;
 
@@ -12,10 +13,12 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
+    private const string ParameterSetContext = "Context";
 
     private readonly CancellationTokenSource _cts = new();
 
-    [Parameter(Mandatory = true)]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string ServiceBusConnectionString { get; set; } = string.Empty;
 
@@ -46,6 +49,12 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
     [Parameter]
     public SwitchParameter Peek { get; set; }
 
+    [Parameter]
+    public SwitchParameter NoComplete { get; set; }
+
+    [Parameter(Mandatory = true, ParameterSetName = ParameterSetContext, ValueFromPipeline = true)]
+    public SessionContext? SessionContext { get; set; }
+
     protected override void EndProcessing()
     {
         try
@@ -69,52 +78,64 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
     private void Receive(CancellationToken cancellationToken)
     {
-        var client = new ServiceBusClient(ServiceBusConnectionString);
+        var client = SessionContext is null ? new ServiceBusClient(ServiceBusConnectionString) : null;
 
-        try
+        if (SessionContext is not null)
         {
-            if (ParameterSetName == ParameterSetQueue)
+            ReceiveFromReceiver(SessionContext.Receiver, Peek, NoComplete, cancellationToken, disposeReceiver: false);
+        }
+        else
+        {
+            try
             {
-                ServiceBusReceiver receiver;
-                try
+                if (ParameterSetName == ParameterSetQueue)
                 {
-                    receiver = client.CreateReceiver(Queue);
-                }
-                catch (InvalidOperationException)
-                {
-                    ReceiveFromSessions(client, Peek, cancellationToken);
+                    ServiceBusReceiver receiver;
+                    try
+                    {
+                        receiver = client!.CreateReceiver(Queue);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        ReceiveFromSessions(client!, Peek, NoComplete, cancellationToken);
+                        return;
+                    }
+
+                    try
+                    {
+                        ReceiveFromReceiver(receiver, Peek, NoComplete, cancellationToken);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Queue requires sessions; fall back.
+                        ReceiveFromSessions(client!, Peek, NoComplete, cancellationToken);
+                    }
                     return;
                 }
 
-                try
-                {
-                    ReceiveFromReceiver(receiver, Peek, cancellationToken);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Queue requires sessions; fall back.
-                    ReceiveFromSessions(client, Peek, cancellationToken);
-                }
-                return;
+                ReceiveTopicPath(client!, cancellationToken);
             }
-
-            try
+            finally
             {
-                var subscriptionReceiver = client.CreateReceiver(Topic, Subscription);
-                ReceiveFromReceiver(subscriptionReceiver, Peek, cancellationToken);
+                client?.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
-            catch (InvalidOperationException)
-            {
-                ReceiveFromSubscriptionSessions(client, Peek, cancellationToken);
-            }
-        }
-        finally
-        {
-            client.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }
 
-    private void ReceiveFromReceiver(ServiceBusReceiver receiver, bool peek, CancellationToken cancellationToken)
+    private void ReceiveTopicPath(ServiceBusClient? client, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var receiver = SessionContext?.Receiver ?? client!.CreateReceiver(Topic, Subscription);
+            ReceiveFromReceiver(receiver, Peek, NoComplete, cancellationToken, disposeReceiver: SessionContext is null);
+        }
+        catch (InvalidOperationException)
+        {
+            ReceiveFromSubscriptionSessions(client!, Peek, NoComplete, cancellationToken);
+        }
+    }
+
+    private void ReceiveFromReceiver(ServiceBusReceiver receiver, bool peek, bool noComplete, CancellationToken cancellationToken, bool disposeReceiver = true)
     {
         try
         {
@@ -146,11 +167,10 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
                 {
                     if (!peek)
                     {
-                        if (MaxMessages > 0 && remaining <= 0)
+                        if (MaxMessages > 0)
                         {
                             break;
                         }
-
                         continue;
                     }
 
@@ -165,7 +185,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
                 {
                     WriteObject(message);
 
-                    if (!peek)
+                    if (!peek && !noComplete)
                     {
                         receiver.CompleteMessageAsync(message, cancellationToken)
                             .GetAwaiter()
@@ -185,11 +205,19 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
         }
         finally
         {
-            receiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            if (disposeReceiver)
+            {
+                receiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
         }
     }
 
     private void ReceiveFromSubscriptionSessions(ServiceBusClient client, bool peek, CancellationToken cancellationToken)
+    {
+        ReceiveFromSubscriptionSessions(client, peek, false, cancellationToken);
+    }
+
+    private void ReceiveFromSubscriptionSessions(ServiceBusClient client, bool peek, bool noComplete, CancellationToken cancellationToken)
     {
         var remaining = MaxMessages;
 
@@ -257,7 +285,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
                     {
                         WriteObject(message);
 
-                        if (!peek)
+                        if (!peek && !noComplete)
                         {
                             sessionReceiver.CompleteMessageAsync(message, cancellationToken)
                                 .GetAwaiter()
@@ -283,6 +311,11 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
     }
 
     private void ReceiveFromSessions(ServiceBusClient client, bool peek, CancellationToken cancellationToken)
+    {
+        ReceiveFromSessions(client, peek, false, cancellationToken);
+    }
+
+    private void ReceiveFromSessions(ServiceBusClient client, bool peek, bool noComplete, CancellationToken cancellationToken)
     {
         var remaining = MaxMessages;
 
@@ -350,7 +383,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
                     {
                         WriteObject(message);
 
-                        if (!peek)
+                        if (!peek && !noComplete)
                         {
                             sessionReceiver.CompleteMessageAsync(message, cancellationToken)
                                 .GetAwaiter()

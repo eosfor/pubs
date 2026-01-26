@@ -5,7 +5,11 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 ## Что умеет
 - `New-SBMessage` — создать шаблон(ы) сообщений с SessionId и application properties.
 - `Send-SBMessage` — отправка в очередь или топик, поддерживает параллельную отправку по сессиям (`-PerSessionThreadAuto` или `-PerSessionThread`).
-- `Receive-SBMessage` — чтение из очереди или подписки; поддерживает peek (`-Peek`) без удаления; автоматически переключается на session receiver, если сущность требует сессии.
+- `Receive-SBMessage` — чтение из очереди или подписки; поддерживает peek (`-Peek`) без удаления и `-NoComplete` для ручного подтверждения; автоматически переключается на session receiver, если сущность требует сессии.
+- `Receive-SBDeferredMessage` — получение отложенных (deferred) сообщений по SequenceNumber (сессии поддерживаются).
+- `Set-SBMessage` — вручную завершить/abandon/defer/dead-letter полученные сообщения.
+- `Get-SBSessionState`, `Set-SBSessionState` — чтение/запись состояния сессии.
+- `New-SBSessionContext`, `Close-SBSessionContext` — открыть и переиспользовать session receiver, чтобы выполнять receive/settle/state в одном lock.
 - `Clear-SBQueue`, `Clear-SBSubscription` — очистка очереди или подписки пакетами.
 
 ## Требования
@@ -69,6 +73,19 @@ $peeked = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $con
 
 # Для топика:
 # $peeked = Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek -WaitSeconds 1
+```
+
+Ручное подтверждение/отложка (settlements):
+```pwsh
+# Получаем без Complete
+$msg = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 1 -NoComplete
+
+# Отложить (defer) сообщение и потом забрать его по SequenceNumber
+$deferredSeq = ($msg | Set-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Defer).SequenceNumber
+$again = Receive-SBDeferredMessage -Queue "test-queue" -ServiceBusConnectionString $conn -SequenceNumber $deferredSeq
+
+# Или завершить вручную
+$msg | Set-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Complete
 ```
 
 ## Тесты

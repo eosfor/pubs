@@ -497,6 +497,48 @@ public class PowerShellCmdletTests
     }
 
     [Fact]
+    public void Defers_and_fetches_deferred_messages()
+    {
+        _fixture.ClearQueue("test-queue");
+
+        var messages = _fixture.NewMessages(null, new[] { "defer-one" });
+        _fixture.SendToQueue("test-queue", messages);
+
+        long seqNumber;
+        using (var ps = _fixture.CreateShell())
+        {
+            ps.AddCommand("Receive-SBMessage")
+                .AddParameter("Queue", "test-queue")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("MaxMessages", 1)
+                .AddParameter("NoComplete", true);
+
+            ps.AddCommand("Set-SBMessage")
+                .AddParameter("Queue", "test-queue")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("Defer", true);
+
+            var result = ps.Invoke<ServiceBusReceivedMessage>();
+            Assert.False(ps.HadErrors);
+            seqNumber = result.Single().SequenceNumber;
+        }
+
+        ServiceBusReceivedMessage[] deferred;
+        using (var ps = _fixture.CreateShell())
+        {
+            ps.AddCommand("Receive-SBDeferredMessage")
+                .AddParameter("Queue", "test-queue")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("SequenceNumber", new[] { seqNumber });
+
+            deferred = ps.Invoke<ServiceBusReceivedMessage>().ToArray();
+            Assert.False(ps.HadErrors);
+        }
+
+        Assert.Single(deferred);
+        Assert.Equal("defer-one", deferred[0].Body.ToString());
+    }
+    [Fact]
     public void Sends_multiple_sessions_in_parallel_when_PerSessionThreadAuto_is_set()
     {
         _fixture.ClearQueue("session-queue");

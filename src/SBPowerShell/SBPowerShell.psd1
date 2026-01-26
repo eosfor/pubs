@@ -32,7 +32,19 @@
     FunctionsToExport = @()
 
     # Cmdlets to export from this module
-    CmdletsToExport = @('New-SBMessage', 'Send-SBMessage', 'Receive-SBMessage', 'Clear-SBQueue', 'Clear-SBSubscription')
+    CmdletsToExport = @(
+        'New-SBMessage',
+        'Send-SBMessage',
+        'Receive-SBMessage',
+        'Receive-SBDeferredMessage',
+        'Set-SBMessage',
+        'Get-SBSessionState',
+        'Set-SBSessionState',
+        'New-SBSessionContext',
+        'Close-SBSessionContext',
+        'Clear-SBQueue',
+        'Clear-SBSubscription'
+    )
 
     # Variables to export from this module
     VariablesToExport = @()
