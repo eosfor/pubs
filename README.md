@@ -5,7 +5,7 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 ## Что умеет
 - `New-SBMessage` — создать шаблон(ы) сообщений с SessionId и application properties.
 - `Send-SBMessage` — отправка в очередь или топик, поддерживает параллельную отправку по сессиям (`-PerSessionThreadAuto` или `-PerSessionThread`).
-- `Receive-SBMessage` — чтение из очереди или подписки; поддерживает peek (`-Peek`) без удаления и `-NoComplete` для ручного подтверждения; автоматически переключается на session receiver, если сущность требует сессии.
+- `Receive-SBMessage` — чтение из очереди или подписки; поддерживает peek (`-Peek`) без удаления и `-NoComplete` для ручного подтверждения; автоматически переключается на session receiver, если сущность требует сессии, и умеет принимать `-SessionContext` для повторного использования открытой сессии.
 - `Receive-SBDeferredMessage` — получение отложенных (deferred) сообщений по SequenceNumber (сессии поддерживаются).
 - `Set-SBMessage` — вручную завершить/abandon/defer/dead-letter полученные сообщения.
 - `Get-SBSessionState`, `Set-SBSessionState` — чтение/запись состояния сессии.
@@ -86,6 +86,63 @@ $again = Receive-SBDeferredMessage -Queue "test-queue" -ServiceBusConnectionStri
 
 # Или завершить вручную
 $msg | Set-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Complete
+```
+
+Потоковая сортировка через defer (для несессионных подписок):
+```pwsh
+# Сообщения содержат ApplicationProperties.order и sessionId (псевдо-сессия)
+Receive-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -MaxMessages 50 -NoComplete |
+    ForEach-Object {
+        $sid   = $_.ApplicationProperties['sessionId']
+        $order = [int]$_.ApplicationProperties['order']
+        $state = $global:orderState[$sid] ??= [pscustomobject]@{ Last = 0; Deferred = @() }
+        $expected = $state.Last + 1
+
+        if ($order -eq $expected) {
+            $_ | Set-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -Complete | Out-Null
+            $state.Last = $order
+            New-SBMessage -SessionId $sid -Body $_.Body.ToString() -CustomProperties @{ order = $order; sessionId = $sid }
+        } else {
+            $_ | Set-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -Defer | Out-Null
+            $state.Deferred += $_.SequenceNumber
+            return
+        }
+
+        # пробуем подтянуть отложенные в правильном порядке
+        while ($state.Deferred.Count) {
+            $nextSeq = ($state.Deferred | Sort-Object | Select-Object -First 1)
+            $state.Deferred = $state.Deferred | Where-Object { $_ -ne $nextSeq }
+            $deferred = Receive-SBDeferredMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -SequenceNumber $nextSeq
+            if (-not $deferred) { break }
+            $dOrder = [int]$deferred.ApplicationProperties['order']
+            if ($dOrder -eq $state.Last + 1) {
+                $deferred | Set-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -Complete | Out-Null
+                $state.Last = $dOrder
+                New-SBMessage -SessionId $sid -Body $deferred.Body.ToString() -CustomProperties @{ order = $dOrder; sessionId = $sid }
+            } else {
+                $state.Deferred += $deferred.SequenceNumber
+                break
+            }
+        }
+    } |
+    Send-SBMessage -Topic "ORDERED_TOPIC" -ServiceBusConnectionString $conn
+
+# SESS_SUB (требует сессий) получит упорядоченный поток благодаря SessionId=sessionId
+```
+
+Повторное использование session receiver (SessionContext):
+```pwsh
+# Открываем сессионный ресивер один раз
+$ctx = New-SBSessionContext -Queue "session-queue" -SessionId "sess-1" -ServiceBusConnectionString $conn
+
+Receive-SBMessage -SessionContext $ctx -MaxMessages 5 -NoComplete |
+    Set-SBMessage -SessionContext $ctx -Complete
+
+# Работаем с состоянием в рамках того же lock
+Get-SBSessionState -SessionContext $ctx
+Set-SBSessionState -SessionContext $ctx -State @{ Progress = 42 }
+
+Close-SBSessionContext -Context $ctx
 ```
 
 ## Тесты
