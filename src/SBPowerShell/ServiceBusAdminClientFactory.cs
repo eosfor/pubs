@@ -32,7 +32,7 @@ internal static class ServiceBusAdminClientFactory
                 return connectionString;
             }
 
-            var host = match.Groups[1].Value;
+            var host = match.Groups[1].Value.TrimEnd('/');
             if (host.Contains(":", StringComparison.Ordinal))
             {
                 return connectionString;
