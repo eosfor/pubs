@@ -7,8 +7,10 @@ using System.Linq;
 using System.Management.Automation;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using Azure.Messaging.ServiceBus.Administration;
 using SBPowerShell.Models;
 using Xunit;
 
@@ -197,7 +199,34 @@ public class ServiceBusFixture : IAsyncLifetime
         EnsureNoErrors(ps);
     }
 
-    private static void EnsureNoErrors(PowerShell ps)
+    public PSObject[] GetTopics()
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Get-SBTopic")
+            .AddParameter("ServiceBusConnectionString", ConnectionString);
+        var result = ps.Invoke<PSObject>().ToArray();
+        EnsureNoErrors(ps);
+        return result;
+    }
+
+    public PSObject[] GetSubscriptions(string topic, string? subscription = null)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Get-SBSubscription")
+            .AddParameter("Topic", topic)
+            .AddParameter("ServiceBusConnectionString", ConnectionString);
+
+        if (!string.IsNullOrEmpty(subscription))
+        {
+            ps.AddParameter("Subscription", subscription);
+        }
+
+        var result = ps.Invoke<PSObject>().ToArray();
+        EnsureNoErrors(ps);
+        return result;
+    }
+
+    internal static void EnsureNoErrors(PowerShell ps)
     {
         if (!ps.HadErrors)
         {
@@ -577,5 +606,56 @@ public class PowerShellCmdletTests
         var receivedBodies = received.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
         var expected = payloads.OrderBy(x => x).ToArray();
         Assert.Equal(expected, receivedBodies);
+    }
+
+    [Fact]
+    public void Lists_topics_with_runtime_properties()
+    {
+        var topics = _fixture.GetTopics();
+        Assert.NotEmpty(topics);
+
+        var testTopic = topics.SingleOrDefault(t => string.Equals(t.Properties["Name"]?.Value?.ToString(), "test-topic", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(testTopic);
+
+        var runtime = testTopic!.Properties["RuntimeProperties"]?.Value as TopicRuntimeProperties;
+        Assert.NotNull(runtime);
+    }
+
+    [Fact]
+    public void Lists_subscriptions_with_runtime_counts_and_supports_pipeline()
+    {
+        _fixture.ClearSubscription("test-topic", "test-sub");
+
+        var msg = _fixture.NewMessages(null, new[] { "count-me" });
+        _fixture.SendToTopic("test-topic", msg);
+
+        // allow admin stats to update
+        Thread.Sleep(500);
+
+        var subs = _fixture.GetSubscriptions("test-topic");
+        var sub = subs.SingleOrDefault(s => string.Equals(s.Properties["SubscriptionName"]?.Value?.ToString(), "test-sub", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(sub);
+
+        var runtime = sub!.Properties["RuntimeProperties"]?.Value as SubscriptionRuntimeProperties;
+        Assert.NotNull(runtime);
+        Assert.True(runtime!.ActiveMessageCount >= 1 || runtime.TotalMessageCount >= 1);
+
+        // pipeline variant
+        using var ps = _fixture.CreateShell();
+        ps.AddCommand("Get-SBTopic")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString);
+        ps.AddCommand("Where-Object")
+            .AddParameter("FilterScript", ScriptBlock.Create("$_.Name -eq 'test-topic'"));
+        ps.AddCommand("Get-SBSubscription")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString);
+
+        var pipelineSubs = ps.Invoke<PSObject>().ToArray();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Contains(pipelineSubs, s =>
+        {
+            var name = s.Properties["SubscriptionName"]?.Value?.ToString();
+            return string.Equals(name, "test-sub", StringComparison.OrdinalIgnoreCase);
+        });
     }
 }

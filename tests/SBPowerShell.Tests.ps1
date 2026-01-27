@@ -242,6 +242,39 @@ Describe "SBPowerShell cmdlets against emulator" {
         ($peeked | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object)
     }
 
+    It "lists topics with runtime properties" {
+        $topics = @(Get-SBTopic -ServiceBusConnectionString $script:connectionString)
+        $topics.Count | Should -BeGreaterThan 0
+
+        $testTopic = @($topics | Where-Object { $_.Name -eq 'test-topic' })
+        $testTopic.Count | Should -Be 1
+        $testTopic[0].RuntimeProperties | Should -BeOfType ([Azure.Messaging.ServiceBus.Administration.TopicRuntimeProperties])
+    }
+
+    It "lists subscriptions with runtime counts and supports pipeline" {
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'count-me'
+        Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Start-Sleep -Seconds 1
+
+        $subs = @(Get-SBSubscription -ServiceBusConnectionString $script:connectionString -Topic 'test-topic')
+        $subs.Count | Should -BeGreaterThan 0
+
+        $sub = @($subs | Where-Object { $_.SubscriptionName -eq 'test-sub' })
+        $sub.Count | Should -Be 1
+        $sub[0].RuntimeProperties | Should -BeOfType ([Azure.Messaging.ServiceBus.Administration.SubscriptionRuntimeProperties])
+        $sub[0].RuntimeProperties.ActiveMessageCount | Should -BeGreaterThan 0
+
+        # pipeline variant
+        $pipelineSubs = @(Get-SBTopic -ServiceBusConnectionString $script:connectionString | Where-Object { $_.Name -eq 'test-topic' } | Get-SBSubscription -ServiceBusConnectionString $script:connectionString)
+        $pipelineSubs.Count | Should -Be 1
+        $pipelineSubs[0].SubscriptionName | Should -Be 'test-sub'
+
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+    }
+
     It "supports NoComplete with manual settle via Set-SBMessage" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
         $messages = New-SBMessage -Body 'manual-complete'

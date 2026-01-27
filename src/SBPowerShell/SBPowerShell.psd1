@@ -43,7 +43,9 @@
         'New-SBSessionContext',
         'Close-SBSessionContext',
         'Clear-SBQueue',
-        'Clear-SBSubscription'
+        'Clear-SBSubscription',
+        'Get-SBTopic',
+        'Get-SBSubscription'
     )
 
     # Variables to export from this module
