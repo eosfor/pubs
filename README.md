@@ -11,6 +11,8 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 - `Get-SBSessionState`, `Set-SBSessionState` — чтение/запись состояния сессии.
 - `New-SBSessionContext`, `Close-SBSessionContext` — открыть и переиспользовать session receiver, чтобы выполнять receive/settle/state в одном lock.
 - `Clear-SBQueue`, `Clear-SBSubscription` — очистка очереди или подписки пакетами.
+- `Get-SBTopic` — список топиков с метаданными из SDK (`TopicProperties`) и runtime-информацией.
+- `Get-SBSubscription` — список подписок указанного топика с метаданными (`SubscriptionProperties`) и runtime-данными, включая количество сообщений.
 
 ## Требования
 - .NET 8/9 SDK для сборки.
@@ -53,6 +55,21 @@ Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnec
 
 - Для топика указывайте `-Topic` при отправке и пару `-Topic` + `-Subscription` при получении. Для очереди достаточно `-Queue`.
 - `-Subscription` требуется только при чтении из топика; для очереди этот параметр не используется.
+
+Просмотр метаданных топиков и подписок:
+```pwsh
+# все топики (TopicProperties + RuntimeProperties)
+Get-SBTopic -ServiceBusConnectionString $conn
+
+# все подписки топика, с runtime-данными (ActiveMessageCount и др.)
+Get-SBSubscription -ServiceBusConnectionString $conn -Topic "test-topic"
+
+# фильтр по подписке
+Get-SBSubscription -ServiceBusConnectionString $conn -Topic "test-topic" -Subscription "test-sub"
+
+# пайплайн: передать объекты TopicProperties дальше
+Get-SBTopic -ServiceBusConnectionString $conn | Get-SBSubscription -ServiceBusConnectionString $conn
+```
 
 Отправка по сессиям с автопараллелизмом:
 ```pwsh
