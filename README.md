@@ -83,6 +83,18 @@ Receive-SBMessage -Queue "session-queue" -ServiceBusConnectionString $conn -MaxM
 # Receive-SBMessage -Topic "session-topic" -Subscription "session-sub" -ServiceBusConnectionString $conn -MaxMessages 6
 ```
 
+Создание сообщений в цикле с явным приведением типов:
+```pwsh
+# При использовании 1..10 в CustomProperties важно явно указывать тип [int],
+# т.к. 1..10 создаёт PSObject'ы, которые SDK Service Bus не может корректно сериализовать
+1..10 | ForEach-Object {
+    New-SBMessage -Body "hello world $_" -CustomProperties @{ prop="v1"; order=[int]$_ } -SessionId "myLovelySession"
+} | ForEach-Object { 
+    Send-SBMessage -ServiceBusConnectionString $conn -Topic "NO_SESSION" -Message $_
+    Start-Sleep -Milliseconds 1500
+}
+```
+
 Просмотр (peek) без удаления:
 ```pwsh
 $peeked = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek -WaitSeconds 1
