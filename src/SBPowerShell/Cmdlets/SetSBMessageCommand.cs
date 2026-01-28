@@ -157,11 +157,24 @@ public sealed class SetSBMessageCommand : PSCmdlet
 
             foreach (var group in sessionGroups)
             {
-                await using var sessionReceiver = await CreateSessionReceiverAsync(client, group.Key, cancellationToken);
-                foreach (var msg in group)
+                try
                 {
-                    await SettleAsync(sessionReceiver, msg, action, cancellationToken);
-                    settled.Add(msg);
+                    await using var sessionReceiver = await CreateSessionReceiverAsync(client, group.Key, cancellationToken);
+                    foreach (var msg in group)
+                    {
+                        await SettleAsync(sessionReceiver, msg, action, cancellationToken);
+                        settled.Add(msg);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Entity is not session-enabled; fall back to non-session receiver even if messages contain SessionId.
+                    await using var receiver = CreateReceiver(client);
+                    foreach (var msg in group)
+                    {
+                        await SettleAsync(receiver, msg, action, cancellationToken);
+                        settled.Add(msg);
+                    }
                 }
             }
         }

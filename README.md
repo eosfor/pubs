@@ -117,48 +117,6 @@ $again = Receive-SBDeferredMessage -Queue "test-queue" -ServiceBusConnectionStri
 $msg | Set-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Complete
 ```
 
-Потоковая сортировка через defer (для несессионных подписок):
-```pwsh
-# Сообщения содержат ApplicationProperties.order и sessionId (псевдо-сессия)
-Receive-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -MaxMessages 50 -NoComplete |
-    ForEach-Object {
-        $sid   = $_.ApplicationProperties['sessionId']
-        $order = [int]$_.ApplicationProperties['order']
-        $state = $global:orderState[$sid] ??= [pscustomobject]@{ Last = 0; Deferred = @() }
-        $expected = $state.Last + 1
-
-        if ($order -eq $expected) {
-            $_ | Set-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -Complete | Out-Null
-            $state.Last = $order
-            New-SBMessage -SessionId $sid -Body $_.Body.ToString() -CustomProperties @{ order = $order; sessionId = $sid }
-        } else {
-            $_ | Set-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -Defer | Out-Null
-            $state.Deferred += $_.SequenceNumber
-            return
-        }
-
-        # пробуем подтянуть отложенные в правильном порядке
-        while ($state.Deferred.Count) {
-            $nextSeq = ($state.Deferred | Sort-Object | Select-Object -First 1)
-            $state.Deferred = $state.Deferred | Where-Object { $_ -ne $nextSeq }
-            $deferred = Receive-SBDeferredMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -SequenceNumber $nextSeq
-            if (-not $deferred) { break }
-            $dOrder = [int]$deferred.ApplicationProperties['order']
-            if ($dOrder -eq $state.Last + 1) {
-                $deferred | Set-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -Complete | Out-Null
-                $state.Last = $dOrder
-                New-SBMessage -SessionId $sid -Body $deferred.Body.ToString() -CustomProperties @{ order = $dOrder; sessionId = $sid }
-            } else {
-                $state.Deferred += $deferred.SequenceNumber
-                break
-            }
-        }
-    } |
-    Send-SBMessage -Topic "ORDERED_TOPIC" -ServiceBusConnectionString $conn
-
-# SESS_SUB (требует сессий) получит упорядоченный поток благодаря SessionId=sessionId
-```
-
 Повторное использование session receiver (SessionContext):
 ```pwsh
 # Открываем сессионный ресивер один раз
@@ -172,6 +130,33 @@ Get-SBSessionState -SessionContext $ctx
 Set-SBSessionState -SessionContext $ctx -State @{ Progress = 42 }
 
 Close-SBSessionContext -Context $ctx
+```
+
+## Потоковая сортировка несессионного топика (`reorderAndForward2.ps1`)
+- Скрипт `scripts/orderingTest/reorderAndForward2.ps1` использует session state, чтобы переставить сообщения по `ApplicationProperties.order`, даже если входная подписка несессионная. Состояние хранится как `{ lastSeenOrderNum:int; deferred: [order, seq][] }` в `ORDERED_TOPIC/SESS_SUB` (должна быть сессионной).
+- Первое полученное сообщение задаёт стартовый `order`; все сообщения с меньшим `order` будут отложены и не попадут на выход (их можно поднять вручную при необходимости).
+- Отправка (перемешать порядок):
+```pwsh
+1..10 |
+  ForEach-Object { New-SBMessage -Body "hello world $_" -CustomProperties @{ prop = "v1"; order = [int]$_ } -SessionId "myLovelySession" } |
+  Sort-Object { Get-Random } |
+  ForEach-Object { Send-SBMessage -ServiceBusConnectionString $cs -Topic "NO_SESSION" -Message $_; Start-Sleep -Milliseconds 1500 }
+```
+- Получение и упорядочивание:
+```pwsh
+. ./scripts/orderingTest/reorderAndForward2.ps1
+Receive-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $cs -NoComplete |
+    Process-Message -ConnStr $cs -Verbose
+```
+- `Process-Message` сам отправляет упорядоченные сообщения в `ORDERED_TOPIC` и выводит их в конвейер для проверки/логирования; дополнительный `Send-SBMessage` после него не нужен.
+- Мини-пример эффекта стартового order: если первым пришёл `order=4`, то сообщения с `order 1..3` будут отложены навсегда, а поток на выход пойдёт с 4,5,6...
+
+## Полная перезагрузка эмулятора
+```bash
+docker compose -f docker-compose.sbus.yml down -v   # остановить и очистить данные
+docker compose -f docker-compose.sbus.yml pull      # обновить образы
+docker compose -f docker-compose.sbus.yml up -d     # запустить
+docker compose -f docker-compose.sbus.yml ps        # проверить статус
 ```
 
 ## Тесты
