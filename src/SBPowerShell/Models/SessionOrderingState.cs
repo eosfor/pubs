@@ -36,17 +36,24 @@ public static class SessionOrderingStateSerializer
 
         try
         {
-            return JsonSerializer.Deserialize<SessionOrderingState>(data, Options);
-        }
-        catch
-        {
-            // fall through
-        }
-
-        try
-        {
             using var doc = JsonDocument.Parse(data);
-            return FromJsonDocument(doc.RootElement);
+            var root = doc.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var hasLastSeen = root.TryGetProperty("lastSeenOrderNum", out _) ||
+                              root.TryGetProperty("LastSeenOrderNum", out _);
+            var hasDeferred = root.TryGetProperty("deferred", out _);
+
+            if (!hasLastSeen && !hasDeferred)
+            {
+                return null; // не наша схема — вернём строкой в cmdlet
+            }
+
+            return FromJsonDocument(root);
         }
         catch
         {
