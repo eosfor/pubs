@@ -135,16 +135,19 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
         try
         {
             var remaining = MaxMessages;
+            var wait = TimeSpan.FromSeconds(WaitSeconds);
 
             while (!cancellationToken.IsCancellationRequested)
             {
                 IReadOnlyList<ServiceBusReceivedMessage> messages;
+                using var recvCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                recvCts.CancelAfter(wait);
 
                 if (peek)
                 {
                     messages = receiver.PeekMessagesAsync(
                             BatchSize,
-                            cancellationToken: cancellationToken)
+                            cancellationToken: recvCts.Token)
                         .GetAwaiter()
                         .GetResult();
                 }
@@ -152,8 +155,8 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
                 {
                     messages = receiver.ReceiveMessagesAsync(
                             BatchSize,
-                            TimeSpan.FromSeconds(WaitSeconds),
-                            cancellationToken)
+                            wait,
+                            recvCts.Token)
                         .GetAwaiter()
                         .GetResult();
                 }
@@ -162,12 +165,8 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
                 {
                     if (!peek)
                     {
-                        if (MaxMessages > 0)
-                        {
-                            break;
-                        }
-
-                        continue;
+                        // даже при MaxMessages=0 выходим после первого пустого окна ожидания
+                        break;
                     }
 
                     Task.Delay(TimeSpan.FromSeconds(WaitSeconds), cancellationToken)
@@ -211,6 +210,7 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
     {
         var remaining = MaxMessages;
         var deadLetterPath = $"{entityPath}/$DeadLetterQueue";
+        var anyReceived = false;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -225,7 +225,10 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
             }
             catch (TaskCanceledException)
             {
-                // No more sessions within wait window.
+                if (anyReceived && (MaxMessages == 0 || remaining > 0))
+                {
+                    continue;
+                }
                 break;
             }
 
@@ -274,6 +277,7 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
 
                     foreach (var message in messages)
                     {
+                        anyReceived = true;
                         WriteObject(message);
 
                         if (!Peek && !NoComplete)

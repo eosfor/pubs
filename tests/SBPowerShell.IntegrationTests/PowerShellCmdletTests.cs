@@ -218,6 +218,28 @@ public class ServiceBusFixture : IAsyncLifetime
         return result.ToArray();
     }
 
+    public ServiceBusReceivedMessage[] ReceiveFromQueueSession(string queue, string sessionId, int maxMessages, int batchSize = 10, int waitSeconds = 5)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("New-SBSessionContext")
+            .AddParameter("Queue", queue)
+            .AddParameter("SessionId", sessionId)
+            .AddParameter("ServiceBusConnectionString", ConnectionString);
+        var ctx = ps.Invoke<PSObject>().Single().BaseObject;
+        EnsureNoErrors(ps);
+        ps.Commands.Clear();
+
+        ps.AddCommand("Receive-SBMessage")
+            .AddParameter("SessionContext", ctx)
+            .AddParameter("MaxMessages", maxMessages)
+            .AddParameter("BatchSize", batchSize)
+            .AddParameter("WaitSeconds", waitSeconds);
+
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        EnsureNoErrors(ps);
+        return result.ToArray();
+    }
+
     public void ClearQueue(string queue)
     {
         using var ps = CreateShell();
@@ -456,6 +478,25 @@ public class PowerShellCmdletTests
     }
 
     [Fact]
+    public void ReceiveSBMessage_stops_after_WaitSeconds_when_queue_empty()
+    {
+        _fixture.ClearQueue("test-queue");
+
+        using var ps = _fixture.CreateShell();
+        var sw = Stopwatch.StartNew();
+        ps.AddCommand("Receive-SBMessage")
+            .AddParameter("Queue", "test-queue")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("WaitSeconds", 1);
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        sw.Stop();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Empty(result);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0, 3);
+    }
+
+    [Fact]
     public void Sends_and_receives_non_session_queue_messages()
     {
         _fixture.ClearQueue("test-queue");
@@ -489,6 +530,25 @@ public class PowerShellCmdletTests
         var peekBodies = peeked.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
         var recvBodies = received.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
         Assert.Equal(peekBodies, recvBodies);
+    }
+
+    [Fact]
+    public void ReceiveSBDLQMessage_stops_after_WaitSeconds_when_dlq_empty()
+    {
+        _fixture.ClearDlqQueue("test-queue");
+
+        using var ps = _fixture.CreateShell();
+        var sw = Stopwatch.StartNew();
+        ps.AddCommand("Receive-SBDLQMessage")
+            .AddParameter("Queue", "test-queue")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("WaitSeconds", 1);
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        sw.Stop();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Empty(result);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0, 3);
     }
 
     [Fact]
@@ -728,13 +788,13 @@ public class PowerShellCmdletTests
 
         _fixture.SendToQueue("session-queue", msgA.Concat(msgB).ToArray(), perSessionThreadAuto: true);
 
-        var received = _fixture.ReceiveFromQueue("session-queue", maxMessages: 10, batchSize: 10, waitSeconds: 2);
-        Assert.Equal(10, received.Length);
+        var recvA = _fixture.ReceiveFromQueueSession("session-queue", sessionA, maxMessages: 5, batchSize: 5, waitSeconds: 5);
+        var recvB = _fixture.ReceiveFromQueueSession("session-queue", sessionB, maxMessages: 5, batchSize: 5, waitSeconds: 5);
 
-        var bySession = received.GroupBy(m => m.SessionId).ToDictionary(g => g.Key!, g => g.ToList());
-        Assert.Equal(2, bySession.Count);
-        Assert.Equal(5, bySession[sessionA].Count);
-        Assert.Equal(5, bySession[sessionB].Count);
+        Assert.Equal(5, recvA.Length);
+        Assert.Equal(5, recvB.Length);
+        Assert.All(recvA, m => Assert.Equal(sessionA, m.SessionId));
+        Assert.All(recvB, m => Assert.Equal(sessionB, m.SessionId));
     }
 
     [Fact]

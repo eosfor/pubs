@@ -57,6 +57,19 @@ Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnec
 - Для топика указывайте `-Topic` при отправке и пару `-Topic` + `-Subscription` при получении. Для очереди достаточно `-Queue`.
 - `-Subscription` требуется только при чтении из топика; для очереди этот параметр не используется.
 
+### Поведение WaitSeconds
+- `WaitSeconds` задаёт верхнюю границу ожидания для **одного** вызова получения: если за это окно нет сообщений, команда возвращает пустой список.
+- Это относится и к `MaxMessages=0` (по умолчанию) — первый пустой опрос завершит вызов.
+- При длительном стриме вызывайте получение в цикле с нужными паузами/условиями:
+  ```pwsh
+  while ($true) {
+      $batch = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 50 -WaitSeconds 2
+      if ($batch.Count -eq 0) { break } # или своя логика выхода/сна
+      # обработка $batch
+  }
+  ```
+- Для строгой работы с конкретной сессией используйте `-SessionContext`, тогда ожидание сессии не блокирует другие.
+
 Просмотр метаданных топиков и подписок:
 ```pwsh
 # все топики (TopicProperties + RuntimeProperties)

@@ -205,6 +205,17 @@ Describe "SBPowerShell cmdlets against emulator" {
         $received[0].Body.ToString() | Should -Be 'topic-msg'
     }
 
+    It "returns after WaitSeconds when queue is empty and MaxMessages is not set" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $received = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1)
+        $sw.Stop()
+
+        $received.Count | Should -Be 0
+        $sw.Elapsed.TotalSeconds | Should -BeLessThan 3
+    }
+
     It "sends and receives session topic messages preserving SessionId" {
         Clear-SBSubscription -Topic 'session-topic' -Subscription 'session-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
 
@@ -289,7 +300,8 @@ Describe "SBPowerShell cmdlets against emulator" {
 
     It "reads dead-letter queue messages for a queue" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
-        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
+        # не зависать в пустой DLQ: запрашиваем хотя бы 1 сообщение, чтобы выйти после первого пустого опроса
+        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1 | Out-Null
 
         $messages = New-SBMessage -Body 'dlq-queue'
         Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
@@ -308,9 +320,22 @@ Describe "SBPowerShell cmdlets against emulator" {
         $shouldBeEmpty.Count | Should -Be 0
     }
 
+    It "returns after WaitSeconds when DLQ is empty and MaxMessages is not set" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1 | Out-Null
+
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $received = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1)
+        $sw.Stop()
+
+        $received.Count | Should -Be 0
+        $sw.Elapsed.TotalSeconds | Should -BeLessThan 3
+    }
+
     It "reads dead-letter queue messages for a subscription" {
         Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
-        Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
+        # чтобы не крутиться в Receive-SBDLQMessage при пустой DLQ — ограничиваем MaxMessages
+        Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1 | Out-Null
 
         $messages = New-SBMessage -Body 'dlq-sub'
         Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString

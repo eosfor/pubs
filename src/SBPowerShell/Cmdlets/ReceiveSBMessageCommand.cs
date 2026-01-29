@@ -140,16 +140,19 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
         try
         {
             var remaining = MaxMessages;
+            var wait = TimeSpan.FromSeconds(WaitSeconds);
 
             while (!cancellationToken.IsCancellationRequested)
             {
                 IReadOnlyList<ServiceBusReceivedMessage> messages;
+                using var recvCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                recvCts.CancelAfter(wait);
 
                 if (peek)
                 {
                     messages = receiver.PeekMessagesAsync(
                             BatchSize,
-                            cancellationToken: cancellationToken)
+                            cancellationToken: recvCts.Token)
                         .GetAwaiter()
                         .GetResult();
                 }
@@ -157,8 +160,8 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
                 {
                     messages = receiver.ReceiveMessagesAsync(
                             BatchSize,
-                            TimeSpan.FromSeconds(WaitSeconds),
-                            cancellationToken)
+                            wait,
+                            recvCts.Token)
                         .GetAwaiter()
                         .GetResult();
                 }
@@ -167,11 +170,8 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
                 {
                     if (!peek)
                     {
-                        if (MaxMessages > 0)
-                        {
-                            break;
-                        }
-                        continue;
+                        // даже при MaxMessages=0 выходим после первого пустого окна ожидания
+                        break;
                     }
 
                     // In peek mode there is no server wait; throttle polling.
@@ -220,6 +220,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
     private void ReceiveFromSubscriptionSessions(ServiceBusClient client, bool peek, bool noComplete, CancellationToken cancellationToken)
     {
         var remaining = MaxMessages;
+        var anyReceived = false;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -234,7 +235,10 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
             }
             catch (TaskCanceledException)
             {
-                // No more sessions within wait window.
+                if (anyReceived && (MaxMessages == 0 || remaining > 0))
+                {
+                    continue;
+                }
                 break;
             }
 
@@ -283,6 +287,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
                     foreach (var message in messages)
                     {
+                        anyReceived = true;
                         WriteObject(message);
 
                         if (!peek && !noComplete)
@@ -318,6 +323,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
     private void ReceiveFromSessions(ServiceBusClient client, bool peek, bool noComplete, CancellationToken cancellationToken)
     {
         var remaining = MaxMessages;
+        var anyReceived = false;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -332,7 +338,11 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
             }
             catch (TaskCanceledException)
             {
-                // No more sessions available within wait window.
+                if (anyReceived && (MaxMessages == 0 || remaining > 0))
+                {
+                    // we already received something; keep probing for more sessions
+                    continue;
+                }
                 break;
             }
 
@@ -381,6 +391,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
                     foreach (var message in messages)
                     {
+                        anyReceived = true;
                         WriteObject(message);
 
                         if (!peek && !noComplete)
