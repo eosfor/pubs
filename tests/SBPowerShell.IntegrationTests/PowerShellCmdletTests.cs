@@ -138,15 +138,33 @@ public class ServiceBusFixture : IAsyncLifetime
         EnsureNoErrors(ps);
     }
 
-    public ServiceBusReceivedMessage[] ReceiveFromQueue(string queue, int maxMessages, int batchSize = 10, int waitSeconds = 5, bool peek = false)
+    public ServiceBusReceivedMessage[] ReceiveFromQueue(string queue, int maxMessages = 0, int batchSize = 10, int? waitSeconds = null, bool peek = false)
     {
+        if (maxMessages > 0 && waitSeconds.HasValue)
+        {
+            throw new ArgumentException("MaxMessages and WaitSeconds are mutually exclusive.");
+        }
+
+        if (maxMessages <= 0 && !waitSeconds.HasValue)
+        {
+            throw new ArgumentException("Specify either MaxMessages or WaitSeconds.");
+        }
+
         using var ps = CreateShell();
         ps.AddCommand("Receive-SBMessage")
             .AddParameter("Queue", queue)
             .AddParameter("ServiceBusConnectionString", ConnectionString)
-            .AddParameter("MaxMessages", maxMessages)
-            .AddParameter("BatchSize", batchSize)
-            .AddParameter("WaitSeconds", waitSeconds);
+            .AddParameter("BatchSize", batchSize);
+
+        if (maxMessages > 0)
+        {
+            ps.AddParameter("MaxMessages", maxMessages);
+        }
+
+        if (waitSeconds.HasValue)
+        {
+            ps.AddParameter("WaitSeconds", waitSeconds.Value);
+        }
 
         if (peek)
         {
@@ -158,15 +176,33 @@ public class ServiceBusFixture : IAsyncLifetime
         return result.ToArray();
     }
 
-    public ServiceBusReceivedMessage[] ReceiveDlqFromQueue(string queue, int maxMessages, int batchSize = 10, int waitSeconds = 5, bool peek = false)
+    public ServiceBusReceivedMessage[] ReceiveDlqFromQueue(string queue, int maxMessages = 0, int batchSize = 10, int? waitSeconds = null, bool peek = false)
     {
+        if (maxMessages > 0 && waitSeconds.HasValue)
+        {
+            throw new ArgumentException("MaxMessages and WaitSeconds are mutually exclusive.");
+        }
+
+        if (maxMessages <= 0 && !waitSeconds.HasValue)
+        {
+            throw new ArgumentException("Specify either MaxMessages or WaitSeconds.");
+        }
+
         using var ps = CreateShell();
         ps.AddCommand("Receive-SBDLQMessage")
             .AddParameter("Queue", queue)
             .AddParameter("ServiceBusConnectionString", ConnectionString)
-            .AddParameter("MaxMessages", maxMessages)
-            .AddParameter("BatchSize", batchSize)
-            .AddParameter("WaitSeconds", waitSeconds);
+            .AddParameter("BatchSize", batchSize);
+
+        if (maxMessages > 0)
+        {
+            ps.AddParameter("MaxMessages", maxMessages);
+        }
+
+        if (waitSeconds.HasValue)
+        {
+            ps.AddParameter("WaitSeconds", waitSeconds.Value);
+        }
 
         if (peek)
         {
@@ -178,15 +214,33 @@ public class ServiceBusFixture : IAsyncLifetime
         return result.ToArray();
     }
 
-    public ServiceBusReceivedMessage[] ReceiveFromSubscription(string topic, string subscription, int maxMessages, int waitSeconds = 5, bool peek = false)
+    public ServiceBusReceivedMessage[] ReceiveFromSubscription(string topic, string subscription, int maxMessages = 0, int? waitSeconds = null, bool peek = false)
     {
+        if (maxMessages > 0 && waitSeconds.HasValue)
+        {
+            throw new ArgumentException("MaxMessages and WaitSeconds are mutually exclusive.");
+        }
+
+        if (maxMessages <= 0 && !waitSeconds.HasValue)
+        {
+            throw new ArgumentException("Specify either MaxMessages or WaitSeconds.");
+        }
+
         using var ps = CreateShell();
         ps.AddCommand("Receive-SBMessage")
             .AddParameter("Topic", topic)
             .AddParameter("Subscription", subscription)
-            .AddParameter("ServiceBusConnectionString", ConnectionString)
-            .AddParameter("MaxMessages", maxMessages)
-            .AddParameter("WaitSeconds", waitSeconds);
+            .AddParameter("ServiceBusConnectionString", ConnectionString);
+
+        if (maxMessages > 0)
+        {
+            ps.AddParameter("MaxMessages", maxMessages);
+        }
+
+        if (waitSeconds.HasValue)
+        {
+            ps.AddParameter("WaitSeconds", waitSeconds.Value);
+        }
 
         if (peek)
         {
@@ -198,15 +252,33 @@ public class ServiceBusFixture : IAsyncLifetime
         return result.ToArray();
     }
 
-    public ServiceBusReceivedMessage[] ReceiveDlqFromSubscription(string topic, string subscription, int maxMessages, int waitSeconds = 5, bool peek = false)
+    public ServiceBusReceivedMessage[] ReceiveDlqFromSubscription(string topic, string subscription, int maxMessages = 0, int? waitSeconds = null, bool peek = false)
     {
+        if (maxMessages > 0 && waitSeconds.HasValue)
+        {
+            throw new ArgumentException("MaxMessages and WaitSeconds are mutually exclusive.");
+        }
+
+        if (maxMessages <= 0 && !waitSeconds.HasValue)
+        {
+            throw new ArgumentException("Specify either MaxMessages or WaitSeconds.");
+        }
+
         using var ps = CreateShell();
         ps.AddCommand("Receive-SBDLQMessage")
             .AddParameter("Topic", topic)
             .AddParameter("Subscription", subscription)
-            .AddParameter("ServiceBusConnectionString", ConnectionString)
-            .AddParameter("MaxMessages", maxMessages)
-            .AddParameter("WaitSeconds", waitSeconds);
+            .AddParameter("ServiceBusConnectionString", ConnectionString);
+
+        if (maxMessages > 0)
+        {
+            ps.AddParameter("MaxMessages", maxMessages);
+        }
+
+        if (waitSeconds.HasValue)
+        {
+            ps.AddParameter("WaitSeconds", waitSeconds.Value);
+        }
 
         if (peek)
         {
@@ -218,7 +290,7 @@ public class ServiceBusFixture : IAsyncLifetime
         return result.ToArray();
     }
 
-    public ServiceBusReceivedMessage[] ReceiveFromQueueSession(string queue, string sessionId, int maxMessages, int batchSize = 10, int waitSeconds = 5)
+    public ServiceBusReceivedMessage[] ReceiveFromQueueSession(string queue, string sessionId, int maxMessages, int batchSize = 10)
     {
         using var ps = CreateShell();
         ps.AddCommand("New-SBSessionContext")
@@ -232,8 +304,7 @@ public class ServiceBusFixture : IAsyncLifetime
         ps.AddCommand("Receive-SBMessage")
             .AddParameter("SessionContext", ctx)
             .AddParameter("MaxMessages", maxMessages)
-            .AddParameter("BatchSize", batchSize)
-            .AddParameter("WaitSeconds", waitSeconds);
+            .AddParameter("BatchSize", batchSize);
 
         var result = ps.Invoke<ServiceBusReceivedMessage>();
         EnsureNoErrors(ps);
@@ -254,7 +325,7 @@ public class ServiceBusFixture : IAsyncLifetime
     {
         while (true)
         {
-            var drained = ReceiveDlqFromQueue(queue, maxMessages: 100, waitSeconds: 1);
+            var drained = ReceiveDlqFromQueue(queue, waitSeconds: 1);
             if (drained.Length == 0)
             {
                 break;
@@ -266,7 +337,7 @@ public class ServiceBusFixture : IAsyncLifetime
     {
         while (true)
         {
-            var drained = ReceiveDlqFromSubscription(topic, subscription, maxMessages: 100, waitSeconds: 1);
+            var drained = ReceiveDlqFromSubscription(topic, subscription, waitSeconds: 1);
             if (drained.Length == 0)
             {
                 break;
@@ -521,10 +592,10 @@ public class PowerShellCmdletTests
         var messages = _fixture.NewMessages(null, new[] { "peek-1", "peek-2" });
         _fixture.SendToQueue("test-queue", messages);
 
-        var peeked = _fixture.ReceiveFromQueue("test-queue", maxMessages: 2, waitSeconds: 1, peek: true);
+        var peeked = _fixture.ReceiveFromQueue("test-queue", maxMessages: 2, peek: true);
         Assert.Equal(2, peeked.Length);
 
-        var received = _fixture.ReceiveFromQueue("test-queue", maxMessages: 2, waitSeconds: 1, peek: false);
+        var received = _fixture.ReceiveFromQueue("test-queue", maxMessages: 2, peek: false);
         Assert.Equal(2, received.Length);
 
         var peekBodies = peeked.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
@@ -598,7 +669,7 @@ public class PowerShellCmdletTests
         var messages = _fixture.NewMessages(null, new[] { "sub-1", "sub-2" });
         _fixture.SendToTopic("test-topic", messages);
 
-        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2, waitSeconds: 1);
+        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2);
         Assert.Equal(2, received.Length);
 
         var bodies = received.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
@@ -655,10 +726,10 @@ public class PowerShellCmdletTests
         var messages = _fixture.NewMessages(null, new[] { "peek-topic-1", "peek-topic-2" });
         _fixture.SendToTopic("test-topic", messages);
 
-        var peeked = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2, waitSeconds: 1, peek: true);
+        var peeked = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2, peek: true);
         Assert.Equal(2, peeked.Length);
 
-        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2, waitSeconds: 1, peek: false);
+        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 2, peek: false);
         Assert.Equal(2, received.Length);
 
         Assert.Equal(
@@ -692,7 +763,7 @@ public class PowerShellCmdletTests
             Assert.False(ps.HadErrors);
         }
 
-        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 1, waitSeconds: 1);
+        var received = _fixture.ReceiveFromSubscription("test-topic", "test-sub", maxMessages: 1);
         Assert.Single(received);
         Assert.Equal("pipe-one", received[0].Body.ToString());
     }
@@ -768,14 +839,14 @@ public class PowerShellCmdletTests
             ServiceBusFixture.EnsureNoErrors(ps);
         }
 
-        var peeked = _fixture.ReceiveDlqFromQueue("test-queue", maxMessages: 1, waitSeconds: 1, peek: true);
+        var peeked = _fixture.ReceiveDlqFromQueue("test-queue", maxMessages: 1, peek: true);
         Assert.Single(peeked);
         Assert.Equal("dlq-queue", peeked[0].Body.ToString());
 
-        var received = _fixture.ReceiveDlqFromQueue("test-queue", maxMessages: 1, waitSeconds: 1);
+        var received = _fixture.ReceiveDlqFromQueue("test-queue", maxMessages: 1);
         Assert.Single(received);
 
-        var shouldBeEmpty = _fixture.ReceiveDlqFromQueue("test-queue", maxMessages: 1, waitSeconds: 1);
+        var shouldBeEmpty = _fixture.ReceiveDlqFromQueue("test-queue", waitSeconds: 1);
         Assert.Empty(shouldBeEmpty);
     }
 
@@ -808,14 +879,14 @@ public class PowerShellCmdletTests
             ServiceBusFixture.EnsureNoErrors(ps);
         }
 
-        var peeked = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", maxMessages: 1, waitSeconds: 1, peek: true);
+        var peeked = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", maxMessages: 1, peek: true);
         Assert.Single(peeked);
         Assert.Equal("dlq-sub", peeked[0].Body.ToString());
 
-        var received = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", maxMessages: 1, waitSeconds: 1);
+        var received = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", maxMessages: 1);
         Assert.Single(received);
 
-        var shouldBeEmpty = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", maxMessages: 1, waitSeconds: 1);
+        var shouldBeEmpty = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", waitSeconds: 1);
         Assert.Empty(shouldBeEmpty);
     }
     [Fact]
@@ -830,8 +901,8 @@ public class PowerShellCmdletTests
 
         _fixture.SendToQueue("session-queue", msgA.Concat(msgB).ToArray(), perSessionThreadAuto: true);
 
-        var recvA = _fixture.ReceiveFromQueueSession("session-queue", sessionA, maxMessages: 5, batchSize: 5, waitSeconds: 5);
-        var recvB = _fixture.ReceiveFromQueueSession("session-queue", sessionB, maxMessages: 5, batchSize: 5, waitSeconds: 5);
+        var recvA = _fixture.ReceiveFromQueueSession("session-queue", sessionA, maxMessages: 5, batchSize: 5);
+        var recvB = _fixture.ReceiveFromQueueSession("session-queue", sessionB, maxMessages: 5, batchSize: 5);
 
         Assert.Equal(5, recvA.Length);
         Assert.Equal(5, recvB.Length);
@@ -850,7 +921,7 @@ public class PowerShellCmdletTests
 
         _fixture.SendToQueue("session-queue", messages, perSessionThread: 4);
 
-        var received = _fixture.ReceiveFromQueue("session-queue", maxMessages: 16, batchSize: 8, waitSeconds: 2);
+        var received = _fixture.ReceiveFromQueue("session-queue", maxMessages: 16, batchSize: 8);
         Assert.Equal(16, received.Length);
         Assert.All(received, m => Assert.Equal(sessionId, m.SessionId));
 

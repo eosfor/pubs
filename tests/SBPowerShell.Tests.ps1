@@ -247,7 +247,7 @@ Describe "SBPowerShell cmdlets against emulator" {
         $messages = New-SBMessage -Body 't-m1','t-m2'
         Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
 
-        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2 -WaitSeconds 1)
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2)
         $received.Count | Should -Be 2
         ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('t-m1','t-m2')
     }
@@ -258,10 +258,10 @@ Describe "SBPowerShell cmdlets against emulator" {
         $messages = New-SBMessage -Body 'peek-topic-a','peek-topic-b'
         Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
 
-        $peeked = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2 -Peek -WaitSeconds 1)
+        $peeked = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2 -Peek)
         $peeked.Count | Should -Be 2
 
-        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2 -WaitSeconds 1)
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 2)
         $received.Count | Should -Be 2
 
         ($peeked | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object)
@@ -308,14 +308,14 @@ Describe "SBPowerShell cmdlets against emulator" {
         Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete |
             Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Complete
 
-        $shouldBeEmpty = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $shouldBeEmpty = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1)
         $shouldBeEmpty.Count | Should -Be 0
     }
 
     It "reads dead-letter queue messages for a queue" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
-        # не зависать в пустой DLQ: запрашиваем хотя бы 1 сообщение, чтобы выйти после первого пустого опроса
-        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1 | Out-Null
+        # не зависать в пустой DLQ: одноразовый опрос с тайм-аутом
+        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
 
         $messages = New-SBMessage -Body 'dlq-queue'
         Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
@@ -323,20 +323,20 @@ Describe "SBPowerShell cmdlets against emulator" {
         Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete |
             Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -DeadLetter -DeadLetterReason 'test-dlq' | Out-Null
 
-        $peeked = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -Peek -WaitSeconds 1)
+        $peeked = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -Peek)
         $peeked.Count | Should -Be 1
         $peeked[0].Body.ToString() | Should -Be 'dlq-queue'
 
-        $received = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $received = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1)
         $received.Count | Should -Be 1
 
-        $shouldBeEmpty = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $shouldBeEmpty = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1)
         $shouldBeEmpty.Count | Should -Be 0
     }
 
     It "returns after WaitSeconds when DLQ is empty and MaxMessages is not set" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
-        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1 | Out-Null
+        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
 
         $sw = [Diagnostics.Stopwatch]::StartNew()
         $received = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1)
@@ -348,8 +348,8 @@ Describe "SBPowerShell cmdlets against emulator" {
 
     It "reads dead-letter queue messages for a subscription" {
         Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
-        # чтобы не крутиться в Receive-SBDLQMessage при пустой DLQ — ограничиваем MaxMessages
-        Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1 | Out-Null
+        # чтобы не крутиться в Receive-SBDLQMessage при пустой DLQ — короткий опрос с тайм-аутом
+        Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
 
         $messages = New-SBMessage -Body 'dlq-sub'
         Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
@@ -357,14 +357,14 @@ Describe "SBPowerShell cmdlets against emulator" {
         Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1 -NoComplete |
             Set-SBMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -DeadLetter -DeadLetterReason 'test-dlq-sub' | Out-Null
 
-        $peeked = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -Peek -WaitSeconds 1)
+        $peeked = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -Peek)
         $peeked.Count | Should -Be 1
         $peeked[0].Body.ToString() | Should -Be 'dlq-sub'
 
-        $received = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $received = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1)
         $received.Count | Should -Be 1
 
-        $shouldBeEmpty = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $shouldBeEmpty = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1)
         $shouldBeEmpty.Count | Should -Be 0
     }
 
@@ -440,7 +440,7 @@ Describe "SBPowerShell cmdlets against emulator" {
 
         $orderedOut | Send-SBMessage -Topic 'session-topic' -ServiceBusConnectionString $script:connectionString
 
-        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'session-topic' -Subscription 'session-sub' -MaxMessages 3 -WaitSeconds 2)
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'session-topic' -Subscription 'session-sub' -MaxMessages 3)
         ($received | ForEach-Object { $_.Body.ToString() }) | Should -Be @('first','second','third')
         $received | ForEach-Object { $_.SessionId | Should -Be $sid }
     }
@@ -541,10 +541,10 @@ Describe "SBPowerShell cmdlets against emulator" {
         Receive-Job $job | Out-Null
         Remove-Job $job | Out-Null
 
-        Receive-SBMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -MaxMessages $total -WaitSeconds 5 -NoComplete |
+        Receive-SBMessage -Topic 'NO_SESSION' -Subscription 'NO_SESS_SUB' -ServiceBusConnectionString $script:connectionString -MaxMessages $total -NoComplete |
             Reorder-And-Forward | Send-SBMessage -Topic 'ORDERED_TOPIC' -ServiceBusConnectionString $script:connectionString
 
-        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'ORDERED_TOPIC' -Subscription 'SESS_SUB' -MaxMessages $total -WaitSeconds 5)
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'ORDERED_TOPIC' -Subscription 'SESS_SUB' -MaxMessages $total)
         ($received | ForEach-Object { $_.Body.ToString() }) | Should -Be @('first','second','third')
         $received | ForEach-Object { $_.SessionId | Should -Be $sid }
     }
@@ -559,7 +559,7 @@ Describe "SBPowerShell cmdlets against emulator" {
         Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 |
             Send-SBMessage -Topic 'test-topic' -ServiceBusConnectionString $script:connectionString
 
-        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1 -WaitSeconds 1)
+        $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1)
         $received.Count | Should -Be 1
         $received[0].Body.ToString() | Should -Be 'pipe-one'
     }
@@ -570,11 +570,11 @@ Describe "SBPowerShell cmdlets against emulator" {
         $messages = New-SBMessage -Body 'peek-one', 'peek-two'
         Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
 
-        $peeked = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 2 -Peek -WaitSeconds 1)
+        $peeked = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 2 -Peek)
         $peeked.Count | Should -Be 2
         ($peeked | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('peek-one','peek-two')
 
-        $received = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 2 -WaitSeconds 1)
+        $received = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 2)
         $received.Count | Should -Be 2
         ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('peek-one','peek-two')
     }
@@ -589,7 +589,7 @@ Describe "SBPowerShell cmdlets against emulator" {
 
         Send-SBMessage -Queue 'session-queue' -Message ($msgA + $msgB) -ServiceBusConnectionString $script:connectionString -PerSessionThreadAuto
 
-        $received = @(Receive-SBMessage -Queue 'session-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 10 -BatchSize 10 -WaitSeconds 2)
+        $received = @(Receive-SBMessage -Queue 'session-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 10 -BatchSize 10)
         $received.Count | Should -Be 10
         ($received | Group-Object SessionId).Count | Should -Be 2
         ($received | Where-Object { $_.SessionId -eq $sessionA }).Count | Should -Be 5
@@ -605,7 +605,7 @@ Describe "SBPowerShell cmdlets against emulator" {
 
         Send-SBMessage -Queue 'session-queue' -Message $messages -ServiceBusConnectionString $script:connectionString -PerSessionThread 4
 
-        $received = @(Receive-SBMessage -Queue 'session-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 16 -BatchSize 8 -WaitSeconds 2)
+        $received = @(Receive-SBMessage -Queue 'session-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 16 -BatchSize 8)
         $received.Count | Should -Be 16
         $received | ForEach-Object { $_.SessionId | Should -Be $sessionId }
         ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be (@($payloads) | Sort-Object)
