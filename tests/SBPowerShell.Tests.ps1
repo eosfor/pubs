@@ -287,6 +287,48 @@ Describe "SBPowerShell cmdlets against emulator" {
         $shouldBeEmpty.Count | Should -Be 0
     }
 
+    It "reads dead-letter queue messages for a queue" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
+
+        $messages = New-SBMessage -Body 'dlq-queue'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete |
+            Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -DeadLetter -DeadLetterReason 'test-dlq' | Out-Null
+
+        $peeked = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -Peek -WaitSeconds 1)
+        $peeked.Count | Should -Be 1
+        $peeked[0].Body.ToString() | Should -Be 'dlq-queue'
+
+        $received = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $received.Count | Should -Be 1
+
+        $shouldBeEmpty = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $shouldBeEmpty.Count | Should -Be 0
+    }
+
+    It "reads dead-letter queue messages for a subscription" {
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
+
+        $messages = New-SBMessage -Body 'dlq-sub'
+        Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1 -NoComplete |
+            Set-SBMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -DeadLetter -DeadLetterReason 'test-dlq-sub' | Out-Null
+
+        $peeked = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -Peek -WaitSeconds 1)
+        $peeked.Count | Should -Be 1
+        $peeked[0].Body.ToString() | Should -Be 'dlq-sub'
+
+        $received = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $received.Count | Should -Be 1
+
+        $shouldBeEmpty = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -WaitSeconds 1)
+        $shouldBeEmpty.Count | Should -Be 0
+    }
+
     It "defers and fetches deferred messages" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
         $messages = New-SBMessage -Body 'needs-order'

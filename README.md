@@ -6,6 +6,7 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 - `New-SBMessage` — создать шаблон(ы) сообщений с SessionId и application properties.
 - `Send-SBMessage` — отправка в очередь или топик, поддерживает параллельную отправку по сессиям (`-PerSessionThreadAuto` или `-PerSessionThread`).
 - `Receive-SBMessage` — чтение из очереди или подписки; поддерживает peek (`-Peek`) без удаления и `-NoComplete` для ручного подтверждения; автоматически переключается на session receiver, если сущность требует сессии, и умеет принимать `-SessionContext` для повторного использования открытой сессии.
+- `Receive-SBDLQMessage` — чтение dead-letter очереди/подписки; те же ключи `-Peek`, `-NoComplete`, `-MaxMessages`, автоматически подключается к session DLQ при необходимости.
 - `Receive-SBDeferredMessage` — получение отложенных (deferred) сообщений по SequenceNumber (сессии поддерживаются).
 - `Set-SBMessage` — вручную завершить/abandon/defer/dead-letter полученные сообщения.
 - `Get-SBSessionState`, `Set-SBSessionState` — чтение/запись состояния сессии.
@@ -102,6 +103,16 @@ $peeked = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $con
 
 # Для топика:
 # $peeked = Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek -WaitSeconds 1
+
+# Dead-letter очереди/подписки
+Receive-SBDLQMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Peek -MaxMessages 10
+Receive-SBDLQMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 10     # читает и Complete
+
+Receive-SBDLQMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -Peek -MaxMessages 10
+Receive-SBDLQMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -MaxMessages 10
+# Поведение: по умолчанию сообщения из DLQ завершаются (Complete) и удаляются; для чтения без удаления используйте -Peek.
+# Если нужно вручную подтвердить/переложить сообщения, задайте -NoComplete и прогоните через Set-SBMessage (как с обычной очередью).
+# MaxMessages=0 (значение по умолчанию) читает всё, что успеет до отмены/пустой выборки. Сессионные DLQ обрабатываются автоматически.
 ```
 
 Ручное подтверждение/отложка (settlements):
