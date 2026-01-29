@@ -158,6 +158,26 @@ public class ServiceBusFixture : IAsyncLifetime
         return result.ToArray();
     }
 
+    public ServiceBusReceivedMessage[] ReceiveDlqFromQueue(string queue, int maxMessages, int batchSize = 10, int waitSeconds = 5, bool peek = false)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Receive-SBDLQMessage")
+            .AddParameter("Queue", queue)
+            .AddParameter("ServiceBusConnectionString", ConnectionString)
+            .AddParameter("MaxMessages", maxMessages)
+            .AddParameter("BatchSize", batchSize)
+            .AddParameter("WaitSeconds", waitSeconds);
+
+        if (peek)
+        {
+            ps.AddParameter("Peek", true);
+        }
+
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        EnsureNoErrors(ps);
+        return result.ToArray();
+    }
+
     public ServiceBusReceivedMessage[] ReceiveFromSubscription(string topic, string subscription, int maxMessages, int waitSeconds = 5, bool peek = false)
     {
         using var ps = CreateShell();
@@ -178,6 +198,48 @@ public class ServiceBusFixture : IAsyncLifetime
         return result.ToArray();
     }
 
+    public ServiceBusReceivedMessage[] ReceiveDlqFromSubscription(string topic, string subscription, int maxMessages, int waitSeconds = 5, bool peek = false)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Receive-SBDLQMessage")
+            .AddParameter("Topic", topic)
+            .AddParameter("Subscription", subscription)
+            .AddParameter("ServiceBusConnectionString", ConnectionString)
+            .AddParameter("MaxMessages", maxMessages)
+            .AddParameter("WaitSeconds", waitSeconds);
+
+        if (peek)
+        {
+            ps.AddParameter("Peek", true);
+        }
+
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        EnsureNoErrors(ps);
+        return result.ToArray();
+    }
+
+    public ServiceBusReceivedMessage[] ReceiveFromQueueSession(string queue, string sessionId, int maxMessages, int batchSize = 10, int waitSeconds = 5)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("New-SBSessionContext")
+            .AddParameter("Queue", queue)
+            .AddParameter("SessionId", sessionId)
+            .AddParameter("ServiceBusConnectionString", ConnectionString);
+        var ctx = ps.Invoke<PSObject>().Single().BaseObject;
+        EnsureNoErrors(ps);
+        ps.Commands.Clear();
+
+        ps.AddCommand("Receive-SBMessage")
+            .AddParameter("SessionContext", ctx)
+            .AddParameter("MaxMessages", maxMessages)
+            .AddParameter("BatchSize", batchSize)
+            .AddParameter("WaitSeconds", waitSeconds);
+
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        EnsureNoErrors(ps);
+        return result.ToArray();
+    }
+
     public void ClearQueue(string queue)
     {
         using var ps = CreateShell();
@@ -186,6 +248,30 @@ public class ServiceBusFixture : IAsyncLifetime
             .AddParameter("ServiceBusConnectionString", ConnectionString)
             .Invoke();
         EnsureNoErrors(ps);
+    }
+
+    public void ClearDlqQueue(string queue)
+    {
+        while (true)
+        {
+            var drained = ReceiveDlqFromQueue(queue, maxMessages: 100, waitSeconds: 1);
+            if (drained.Length == 0)
+            {
+                break;
+            }
+        }
+    }
+
+    public void ClearDlqSubscription(string topic, string subscription)
+    {
+        while (true)
+        {
+            var drained = ReceiveDlqFromSubscription(topic, subscription, maxMessages: 100, waitSeconds: 1);
+            if (drained.Length == 0)
+            {
+                break;
+            }
+        }
     }
 
     public void ClearSubscription(string topic, string subscription)
@@ -243,6 +329,10 @@ public class ServiceBusFixture : IAsyncLifetime
         ClearQueue("session-queue");
         ClearSubscription("test-topic", "test-sub");
         ClearSubscription("session-topic", "session-sub");
+        ClearDlqQueue("test-queue");
+        ClearDlqQueue("session-queue");
+        ClearDlqSubscription("test-topic", "test-sub");
+        ClearDlqSubscription("session-topic", "session-sub");
         return Task.CompletedTask;
     }
 
@@ -388,6 +478,25 @@ public class PowerShellCmdletTests
     }
 
     [Fact]
+    public void ReceiveSBMessage_stops_after_WaitSeconds_when_queue_empty()
+    {
+        _fixture.ClearQueue("test-queue");
+
+        using var ps = _fixture.CreateShell();
+        var sw = Stopwatch.StartNew();
+        ps.AddCommand("Receive-SBMessage")
+            .AddParameter("Queue", "test-queue")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("WaitSeconds", 1);
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        sw.Stop();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Empty(result);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0, 3);
+    }
+
+    [Fact]
     public void Sends_and_receives_non_session_queue_messages()
     {
         _fixture.ClearQueue("test-queue");
@@ -421,6 +530,25 @@ public class PowerShellCmdletTests
         var peekBodies = peeked.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
         var recvBodies = received.Select(m => m.Body.ToString()).OrderBy(x => x).ToArray();
         Assert.Equal(peekBodies, recvBodies);
+    }
+
+    [Fact]
+    public void ReceiveSBDLQMessage_stops_after_WaitSeconds_when_dlq_empty()
+    {
+        _fixture.ClearDlqQueue("test-queue");
+
+        using var ps = _fixture.CreateShell();
+        var sw = Stopwatch.StartNew();
+        ps.AddCommand("Receive-SBDLQMessage")
+            .AddParameter("Queue", "test-queue")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("WaitSeconds", 1);
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        sw.Stop();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Empty(result);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0, 3);
     }
 
     [Fact]
@@ -501,6 +629,8 @@ public class PowerShellCmdletTests
     {
         _fixture.ClearQueue("test-queue");
         _fixture.ClearSubscription("test-topic", "test-sub");
+        _fixture.ClearDlqQueue("test-queue");
+        _fixture.ClearDlqSubscription("test-topic", "test-sub");
 
         var messages = _fixture.NewMessages(null, new[] { "pipe-one" });
         _fixture.SendToQueue("test-queue", messages);
@@ -529,6 +659,7 @@ public class PowerShellCmdletTests
     public void Defers_and_fetches_deferred_messages()
     {
         _fixture.ClearQueue("test-queue");
+        _fixture.ClearDlqQueue("test-queue");
 
         var messages = _fixture.NewMessages(null, new[] { "defer-one" });
         _fixture.SendToQueue("test-queue", messages);
@@ -567,6 +698,84 @@ public class PowerShellCmdletTests
         Assert.Single(deferred);
         Assert.Equal("defer-one", deferred[0].Body.ToString());
     }
+
+    [Fact]
+    public void Reads_deadletter_queue_messages_for_queue()
+    {
+        _fixture.ClearQueue("test-queue");
+        _fixture.ClearDlqQueue("test-queue");
+
+        var messages = _fixture.NewMessages(null, new[] { "dlq-queue" });
+        _fixture.SendToQueue("test-queue", messages);
+
+        using (var ps = _fixture.CreateShell())
+        {
+            ps.AddCommand("Receive-SBMessage")
+                .AddParameter("Queue", "test-queue")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("MaxMessages", 1)
+                .AddParameter("NoComplete", true);
+
+            ps.AddCommand("Set-SBMessage")
+                .AddParameter("Queue", "test-queue")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("DeadLetter", true)
+                .AddParameter("DeadLetterReason", "integration-test");
+
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+        }
+
+        var peeked = _fixture.ReceiveDlqFromQueue("test-queue", maxMessages: 1, waitSeconds: 1, peek: true);
+        Assert.Single(peeked);
+        Assert.Equal("dlq-queue", peeked[0].Body.ToString());
+
+        var received = _fixture.ReceiveDlqFromQueue("test-queue", maxMessages: 1, waitSeconds: 1);
+        Assert.Single(received);
+
+        var shouldBeEmpty = _fixture.ReceiveDlqFromQueue("test-queue", maxMessages: 1, waitSeconds: 1);
+        Assert.Empty(shouldBeEmpty);
+    }
+
+    [Fact]
+    public void Reads_deadletter_queue_messages_for_subscription()
+    {
+        _fixture.ClearSubscription("test-topic", "test-sub");
+        _fixture.ClearDlqSubscription("test-topic", "test-sub");
+
+        var messages = _fixture.NewMessages(null, new[] { "dlq-sub" });
+        _fixture.SendToTopic("test-topic", messages);
+
+        using (var ps = _fixture.CreateShell())
+        {
+            ps.AddCommand("Receive-SBMessage")
+                .AddParameter("Topic", "test-topic")
+                .AddParameter("Subscription", "test-sub")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("MaxMessages", 1)
+                .AddParameter("NoComplete", true);
+
+            ps.AddCommand("Set-SBMessage")
+                .AddParameter("Topic", "test-topic")
+                .AddParameter("Subscription", "test-sub")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("DeadLetter", true)
+                .AddParameter("DeadLetterReason", "integration-test-sub");
+
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+        }
+
+        var peeked = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", maxMessages: 1, waitSeconds: 1, peek: true);
+        Assert.Single(peeked);
+        Assert.Equal("dlq-sub", peeked[0].Body.ToString());
+
+        var received = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", maxMessages: 1, waitSeconds: 1);
+        Assert.Single(received);
+
+        var shouldBeEmpty = _fixture.ReceiveDlqFromSubscription("test-topic", "test-sub", maxMessages: 1, waitSeconds: 1);
+        Assert.Empty(shouldBeEmpty);
+    }
     [Fact]
     public void Sends_multiple_sessions_in_parallel_when_PerSessionThreadAuto_is_set()
     {
@@ -579,13 +788,13 @@ public class PowerShellCmdletTests
 
         _fixture.SendToQueue("session-queue", msgA.Concat(msgB).ToArray(), perSessionThreadAuto: true);
 
-        var received = _fixture.ReceiveFromQueue("session-queue", maxMessages: 10, batchSize: 10, waitSeconds: 2);
-        Assert.Equal(10, received.Length);
+        var recvA = _fixture.ReceiveFromQueueSession("session-queue", sessionA, maxMessages: 5, batchSize: 5, waitSeconds: 5);
+        var recvB = _fixture.ReceiveFromQueueSession("session-queue", sessionB, maxMessages: 5, batchSize: 5, waitSeconds: 5);
 
-        var bySession = received.GroupBy(m => m.SessionId).ToDictionary(g => g.Key!, g => g.ToList());
-        Assert.Equal(2, bySession.Count);
-        Assert.Equal(5, bySession[sessionA].Count);
-        Assert.Equal(5, bySession[sessionB].Count);
+        Assert.Equal(5, recvA.Length);
+        Assert.Equal(5, recvB.Length);
+        Assert.All(recvA, m => Assert.Equal(sessionA, m.SessionId));
+        Assert.All(recvB, m => Assert.Equal(sessionB, m.SessionId));
     }
 
     [Fact]

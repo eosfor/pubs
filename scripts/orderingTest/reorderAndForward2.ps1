@@ -15,7 +15,7 @@ function Get-ReorderState {
         Write-Verbose "No existing state, initializing defaults"
         return @{
             lastSeenOrderNum = 0
-            deferred        = @()
+            deferred         = @()
         }
     }
 
@@ -27,13 +27,13 @@ function Get-ReorderState {
     $normalized = @()
     foreach ($item in ($state.deferred ?? @())) {
         if ($item -is [array] -and $item.Length -ge 2) {
-            $normalized += ,@([int]$item[0], [int64]$item[1])
+            $normalized += , @([int]$item[0], [int64]$item[1])
         }
     }
     $state.deferred = $normalized
     return @{
         lastSeenOrderNum = [int]$state.lastSeenOrderNum
-        deferred        = @($state.deferred)
+        deferred         = @($state.deferred)
     }
 }
 
@@ -46,9 +46,9 @@ function Save-ReorderState {
 
     Write-Verbose "Saving state for SessionId='$SessionId': lastSeen=$($State.lastSeenOrderNum); deferredCount=$($State.deferred.Count)"
     $json = (@{
-        lastSeenOrderNum = $State.lastSeenOrderNum
-        deferred        = $State.deferred
-    } | ConvertTo-Json -Compress)
+            lastSeenOrderNum = $State.lastSeenOrderNum
+            deferred         = $State.deferred
+        } | ConvertTo-Json -Compress)
     Set-SBSessionState -ServiceBusConnectionString $ConnStr -SessionId $SessionId -Topic "ORDERED_TOPIC" -Subscription "SESS_SUB" -State $json
 }
 
@@ -72,6 +72,16 @@ function Defer-InputMessage {
     Set-SBMessage -ServiceBusConnectionString $ConnStr -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -Message $Message -Defer | Out-Null
 }
 
+function DeadLetter-InputMessage {
+    param(
+        [string]$ConnStr,
+        [Azure.Messaging.ServiceBus.ServiceBusReceivedMessage]$Message
+    )
+
+    Write-Verbose "Dead-letter msg seq=$($Message.SequenceNumber) order=$($Message.ApplicationProperties['order'])"
+    Set-SBMessage -ServiceBusConnectionString $ConnStr -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -Message $Message -DeadLetter  -DeadLetterReason "The 'order' value is less than expected" | Out-Null
+}
+
 function Drain-DeferredMessages {
     param(
         [string]$ConnStr,
@@ -84,16 +94,23 @@ function Drain-DeferredMessages {
     $ordered = $State.Value.deferred | Sort-Object { $_[0] }
     foreach ($pair in $ordered) {
         $order = [int]$pair[0]
-        $seq   = [int64]$pair[1]
+        $seq = [int64]$pair[1]
         if ($order -eq $StartExpected) {
             $dm = Receive-SBDeferredMessage -ServiceBusConnectionString $ConnStr -SequenceNumber $seq -Topic "NO_SESSION" -Subscription "NO_SESS_SUB"
+            if (-not $dm) {
+                Write-Warning "Deferred msg seq=$seq order=$order not returned (expired/locked); will retry later"
+                $remaining.Add(@($order, $seq))
+                continue
+            }
+
             Write-Verbose "Processing deferred msg seq=$($dm.SequenceNumber) order=$order"
             Send-SBMessage -ServiceBusConnectionString $ConnStr -ReceivedInputObject $dm -Topic "ORDERED_TOPIC"
             Complete-InputMessage -ConnStr $ConnStr -Message $dm
             $State.Value.lastSeenOrderNum = $order
             Write-Output $dm
             $StartExpected++
-        } else {
+        }
+        else {
             $remaining.Add(@($order, $seq))
         }
     }
@@ -125,8 +142,17 @@ function Handle-OutOfOrder {
         [ref]$State
     )
 
-    Write-Verbose "Out-of-order msg seq=$($Message.SequenceNumber) order=$($Message.ApplicationProperties['order']) expected=$($State.Value.lastSeenOrderNum + 1)"
-    $State.Value.deferred += ,@([int]$Message.ApplicationProperties["order"], [int64]$Message.SequenceNumber)
+    $expectedOrderNum = $State.Value.lastSeenOrderNum + 1
+    $orderVal = [int]$Message.ApplicationProperties["order"]
+
+    Write-Verbose "Out-of-order msg seq=$($Message.SequenceNumber) order=$orderVal expected=$expectedOrderNum"
+
+    if ($orderVal -lt $expectedOrderNum) {
+        DeadLetter-InputMessage -ConnStr $ConnStr -Message $Message
+        return
+    }
+
+    $State.Value.deferred += , @($orderVal, [int64]$Message.SequenceNumber)
     Defer-InputMessage -ConnStr $ConnStr -Message $Message
     Save-ReorderState -ConnStr $ConnStr -SessionId $Message.SessionId -State $State.Value
 }
@@ -191,6 +217,7 @@ function Process-Message {
         $stateRef = [ref]$state
 
         $orderVal = [int]$msg.ApplicationProperties["order"]
+
         if ($orderVal -eq $expectedOrderNum) {
             # сообщение пришло в ожидаемом порядке
             Handle-InOrder -ConnStr $ConnStr -Message $msg -State $stateRef
