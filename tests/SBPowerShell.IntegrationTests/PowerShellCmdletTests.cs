@@ -606,6 +606,48 @@ public class PowerShellCmdletTests
     }
 
     [Fact]
+    public void Session_state_roundtrips_via_new_cmdlet()
+    {
+        var sessionId = $"state-{Guid.NewGuid():N}";
+        using var ps = _fixture.CreateShell();
+
+        ps.AddCommand("New-SBSessionState")
+            .AddParameter("LastSeenOrderNum", 3)
+            .AddParameter("Deferred", new[]
+            {
+                new Hashtable { { "order", 5 }, { "seq", 11L } },
+                new Hashtable { { "order", 6 }, { "seq", 12L } }
+            });
+        var state = ps.Invoke<PSObject>().Single().BaseObject;
+        ServiceBusFixture.EnsureNoErrors(ps);
+        ps.Commands.Clear();
+
+        ps.AddCommand("Set-SBSessionState")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("SessionId", sessionId)
+            .AddParameter("Topic", "session-topic")
+            .AddParameter("Subscription", "session-sub")
+            .AddParameter("State", state);
+        ps.Invoke();
+        ServiceBusFixture.EnsureNoErrors(ps);
+        ps.Commands.Clear();
+
+        ps.AddCommand("Get-SBSessionState")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("SessionId", sessionId)
+            .AddParameter("Topic", "session-topic")
+            .AddParameter("Subscription", "session-sub");
+        var fetched = ps.Invoke<PSObject>().Single().BaseObject as SessionOrderingState;
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.NotNull(fetched);
+        Assert.Equal(3, fetched!.LastSeenOrderNum);
+        Assert.Equal(2, fetched.Deferred.Count);
+        Assert.Contains(fetched.Deferred, d => d.Order == 5 && d.Seq == 11);
+        Assert.Contains(fetched.Deferred, d => d.Order == 6 && d.Seq == 12);
+    }
+
+    [Fact]
     public void Peek_from_subscription_does_not_remove_messages()
     {
         _fixture.ClearSubscription("test-topic", "test-sub");

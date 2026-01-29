@@ -9,7 +9,8 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 - `Receive-SBDLQMessage` — чтение dead-letter очереди/подписки; те же ключи `-Peek`, `-NoComplete`, `-MaxMessages`, автоматически подключается к session DLQ при необходимости.
 - `Receive-SBDeferredMessage` — получение отложенных (deferred) сообщений по SequenceNumber (сессии поддерживаются).
 - `Set-SBMessage` — вручную завершить/abandon/defer/dead-letter полученные сообщения.
-- `Get-SBSessionState`, `Set-SBSessionState` — чтение/запись состояния сессии.
+- `New-SBSessionState` — создаёт типобезопасный объект состояния (DSO) из примитивов.
+- `Get-SBSessionState`, `Set-SBSessionState` — читают/пишут состояние сессии как DSO (BinaryData внутри, JSON под капотом), без PowerShell‑JSON «расплющивания».
 - `New-SBSessionContext`, `Close-SBSessionContext` — открыть и переиспользовать session receiver, чтобы выполнять receive/settle/state в одном lock.
 - `Clear-SBQueue`, `Clear-SBSubscription` — очистка очереди или подписки пакетами.
 - `Get-SBTopic` — список топиков с метаданными из SDK (`TopicProperties`) и runtime-информацией.
@@ -157,7 +158,7 @@ Close-SBSessionContext -Context $ctx
 ```
 
 ## Потоковая сортировка несессионного топика (`reorderAndForward2.ps1`)
-- Скрипт `scripts/orderingTest/reorderAndForward2.ps1` использует session state, чтобы переставить сообщения по `ApplicationProperties.order`, даже если входная подписка несессионная. Состояние хранится как `{ lastSeenOrderNum:int; deferred: [order, seq][] }` в `ORDERED_TOPIC/SESS_SUB` (должна быть сессионной).
+- Скрипт `scripts/orderingTest/reorderAndForward2.ps1` использует session state, чтобы переставить сообщения по `ApplicationProperties.order`, даже если входная подписка несессионная. Состояние хранится как DSO `SessionOrderingState` ( `LastSeenOrderNum:int`, `Deferred: List<OrderSeq{Order:int,Seq:long}>` ) в `ORDERED_TOPIC/SESS_SUB` (должна быть сессионной).
 - Первое полученное сообщение задаёт стартовый `order`; все сообщения с меньшим `order` будут отложены и не попадут на выход (их можно поднять вручную при необходимости).
 - Отправка (перемешать порядок):
 ```pwsh
@@ -174,6 +175,7 @@ Receive-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusCon
 ```
 - `Process-Message` сам отправляет упорядоченные сообщения в `ORDERED_TOPIC` и выводит их в конвейер для проверки/логирования; дополнительный `Send-SBMessage` после него не нужен.
 - Мини-пример эффекта стартового order: если первым пришёл `order=4`, то сообщения с `order 1..3` будут отложены навсегда, а поток на выход пойдёт с 4,5,6...
+> Внутри скрипт больше не делает `ConvertFrom/To-Json`: `Get/Set-SBSessionState` работают с DSO, поэтому не происходит потеря вложенных массивов и выпадение `MessageNotFound` при чтении deferred.
 
 ## Полная перезагрузка эмулятора
 ```bash
