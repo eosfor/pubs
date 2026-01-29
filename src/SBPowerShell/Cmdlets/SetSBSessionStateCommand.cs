@@ -46,31 +46,12 @@ public sealed class SetSBSessionStateCommand : PSCmdlet
     {
         try
         {
-            if (SessionContext is null && string.IsNullOrWhiteSpace(ServiceBusConnectionString))
-            {
-                throw new ArgumentException("ServiceBusConnectionString is required when SessionContext is not provided.");
-            }
-
-            var client = SessionContext is null ? new ServiceBusClient(ServiceBusConnectionString) : null;
+            EnsureConnectionString();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var scope = CreateReceiver(cts.Token, out var receiver);
 
-            ServiceBusSessionReceiver receiver = SessionContext?.Receiver ?? (ParameterSetName == ParameterSetQueue
-                ? client!.AcceptSessionAsync(Queue, SessionId, cancellationToken: cts.Token).GetAwaiter().GetResult()
-                : client!.AcceptSessionAsync(Topic, Subscription, SessionId, cancellationToken: cts.Token).GetAwaiter().GetResult());
-
-            try
-            {
-                var binary = ToBinaryData(State);
-                receiver.SetSessionStateAsync(binary, cts.Token).GetAwaiter().GetResult();
-            }
-            finally
-            {
-                if (SessionContext is null)
-                {
-                    receiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
-                    client?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-                }
-            }
+            var binary = ToBinaryData(State);
+            receiver.SetSessionStateAsync(binary, cts.Token).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
@@ -78,16 +59,42 @@ public sealed class SetSBSessionStateCommand : PSCmdlet
         }
     }
 
-    private static BinaryData ToBinaryData(object value)
+    private void EnsureConnectionString()
     {
+        if (SessionContext is null && string.IsNullOrWhiteSpace(ServiceBusConnectionString))
+        {
+            throw new ArgumentException("ServiceBusConnectionString is required when SessionContext is not provided.");
+        }
+    }
+
+    private ReceiverScope CreateReceiver(CancellationToken ct, out ServiceBusSessionReceiver receiver)
+    {
+        if (SessionContext is not null)
+        {
+            receiver = SessionContext.Receiver;
+            return new ReceiverScope(null, null);
+        }
+
+        var client = new ServiceBusClient(ServiceBusConnectionString);
+        receiver = ParameterSetName == ParameterSetQueue
+            ? client.AcceptSessionAsync(Queue, SessionId, cancellationToken: ct).GetAwaiter().GetResult()
+            : client.AcceptSessionAsync(Topic, Subscription, SessionId, cancellationToken: ct).GetAwaiter().GetResult();
+
+        return new ReceiverScope(client, receiver);
+    }
+
+    private static BinaryData ToBinaryData(object? value)
+    {
+        value = Unwrap(value);
+
         if (value is null)
         {
             return BinaryData.FromString(string.Empty);
         }
 
-        if (value is PSObject psObj)
+        if (value is SessionOrderingState typedState)
         {
-            value = psObj.BaseObject ?? string.Empty;
+            return SessionOrderingStateSerializer.Serialize(typedState);
         }
 
         if (value is string s)
@@ -101,5 +108,33 @@ public sealed class SetSBSessionStateCommand : PSCmdlet
         }
 
         return BinaryData.FromBytes(JsonSerializer.SerializeToUtf8Bytes(value));
+    }
+
+    private static object? Unwrap(object? value)
+    {
+        if (value is PSObject psObj)
+        {
+            return psObj.BaseObject;
+        }
+
+        return value;
+    }
+
+    private readonly struct ReceiverScope : IDisposable
+    {
+        private readonly ServiceBusClient? _client;
+        private readonly ServiceBusSessionReceiver? _receiver;
+
+        public ReceiverScope(ServiceBusClient? client, ServiceBusSessionReceiver? receiver)
+        {
+            _client = client;
+            _receiver = receiver;
+        }
+
+        public void Dispose()
+        {
+            _receiver?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _client?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
     }
 }

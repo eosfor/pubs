@@ -205,6 +205,20 @@ Describe "SBPowerShell cmdlets against emulator" {
         $received[0].Body.ToString() | Should -Be 'topic-msg'
     }
 
+    It "creates and roundtrips session state via DSO" {
+        $sessionId = "ps-state-$([guid]::NewGuid().ToString('N'))"
+        $state = New-SBSessionState -LastSeenOrderNum 5 -Deferred @(@{order=7;seq=11}, @{order=9;seq=15})
+        Set-SBSessionState -ServiceBusConnectionString $script:connectionString -SessionId $sessionId -Topic 'session-topic' -Subscription 'session-sub' -State $state
+
+        $fetched = Get-SBSessionState -ServiceBusConnectionString $script:connectionString -SessionId $sessionId -Topic 'session-topic' -Subscription 'session-sub'
+        $fetched | Should -Not -BeNullOrEmpty
+        $fetched.GetType().Name | Should -Be 'SessionOrderingState'
+        $fetched.LastSeenOrderNum | Should -Be 5
+        $fetched.Deferred.Count | Should -Be 2
+        ($fetched.Deferred | Where-Object Order -eq 7).Seq | Should -Be 11
+        ($fetched.Deferred | Where-Object Order -eq 9).Seq | Should -Be 15
+    }
+
     It "returns after WaitSeconds when queue is empty and MaxMessages is not set" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
 

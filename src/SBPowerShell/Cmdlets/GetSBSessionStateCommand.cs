@@ -81,6 +81,13 @@ public sealed class GetSBSessionStateCommand : PSCmdlet
                     return;
                 }
 
+                var model = SessionOrderingStateSerializer.Deserialize(state);
+                if (model is not null)
+                {
+                    WriteObject(model);
+                    return;
+                }
+
                 try
                 {
                     var doc = JsonDocument.Parse(state.ToStream());

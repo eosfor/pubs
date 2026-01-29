@@ -41,6 +41,7 @@
         'Set-SBMessage',
         'Get-SBSessionState',
         'Set-SBSessionState',
+        'New-SBSessionState',
         'New-SBSessionContext',
         'Close-SBSessionContext',
         'Clear-SBQueue',

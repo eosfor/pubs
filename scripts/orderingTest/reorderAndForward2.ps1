@@ -10,46 +10,37 @@ function Get-ReorderState {
     )
 
     Write-Verbose "Loading session state for SessionId='$SessionId'"
-    $stateStr = Get-SBSessionState -ServiceBusConnectionString $ConnStr -SessionId $SessionId -Topic "ORDERED_TOPIC" -Subscription "SESS_SUB" -AsString -ErrorAction SilentlyContinue
-    if (-not $stateStr) {
+    $stateObj = Get-SBSessionState -ServiceBusConnectionString $ConnStr -SessionId $SessionId -Topic "ORDERED_TOPIC" -Subscription "SESS_SUB" -ErrorAction SilentlyContinue
+    if (-not $stateObj) {
         Write-Verbose "No existing state, initializing defaults"
-        return @{
-            lastSeenOrderNum = 0
-            deferred         = @()
-        }
+        $empty = [SBPowerShell.Models.SessionOrderingState]::new()
+        $empty.LastSeenOrderNum = 0
+        $empty.Deferred = [System.Collections.Generic.List[SBPowerShell.Models.OrderSeq]]::new()
+        return $empty
     }
 
-    $state = $stateStr | ConvertFrom-Json
-    Write-Verbose "Loaded state: lastSeen=$($state.lastSeenOrderNum); deferredCount=$($state.deferred.Count)"
-    if (-not $state.PSObject.Properties['deferred']) { $state | Add-Member -NotePropertyName deferred -NotePropertyValue @() }
-    if (-not $state.PSObject.Properties['lastSeenOrderNum']) { $state | Add-Member -NotePropertyName lastSeenOrderNum -NotePropertyValue 0 }
-    # ensure deferred is an array of primitive pairs [order, seq]
-    $normalized = @()
-    foreach ($item in ($state.deferred ?? @())) {
-        if ($item -is [array] -and $item.Length -ge 2) {
-            $normalized += , @([int]$item[0], [int64]$item[1])
-        }
+    if ($stateObj -isnot [SBPowerShell.Models.SessionOrderingState]) {
+        throw "Unexpected session state format; expected SessionOrderingState but got $($stateObj.GetType().FullName)"
     }
-    $state.deferred = $normalized
-    return @{
-        lastSeenOrderNum = [int]$state.lastSeenOrderNum
-        deferred         = @($state.deferred)
+
+    if (-not $stateObj.Deferred) {
+        $stateObj.Deferred = [System.Collections.Generic.List[SBPowerShell.Models.OrderSeq]]::new()
     }
+
+    Write-Verbose "Loaded state: lastSeen=$($stateObj.LastSeenOrderNum); deferredCount=$($stateObj.Deferred.Count)"
+    return $stateObj
 }
 
 function Save-ReorderState {
     param(
         [string]$ConnStr,
         [string]$SessionId,
-        $State
+        [SBPowerShell.Models.SessionOrderingState]$State
     )
 
-    Write-Verbose "Saving state for SessionId='$SessionId': lastSeen=$($State.lastSeenOrderNum); deferredCount=$($State.deferred.Count)"
-    $json = (@{
-            lastSeenOrderNum = $State.lastSeenOrderNum
-            deferred         = $State.deferred
-        } | ConvertTo-Json -Compress)
-    Set-SBSessionState -ServiceBusConnectionString $ConnStr -SessionId $SessionId -Topic "ORDERED_TOPIC" -Subscription "SESS_SUB" -State $json
+    Write-Verbose "Saving state for SessionId='$SessionId': lastSeen=$($State.LastSeenOrderNum); deferredCount=$($State.Deferred.Count)"
+    $stateToSave = New-SBSessionState -LastSeenOrderNum $State.LastSeenOrderNum -Deferred ($State.Deferred | ForEach-Object { @{ order = $_.Order; seq = $_.Seq } })
+    Set-SBSessionState -ServiceBusConnectionString $ConnStr -SessionId $SessionId -Topic "ORDERED_TOPIC" -Subscription "SESS_SUB" -State $stateToSave
 }
 
 function Complete-InputMessage {
@@ -90,31 +81,32 @@ function Drain-DeferredMessages {
     )
 
     Write-Verbose "Draining deferred starting from order $StartExpected; count=$($State.Value.deferred.Count)"
-    $remaining = New-Object System.Collections.Generic.List[object]
-    $ordered = $State.Value.deferred | Sort-Object { $_[0] }
+    $remaining = [System.Collections.Generic.List[SBPowerShell.Models.OrderSeq]]::new()
+    $ordered = $State.Value.Deferred | Sort-Object Order
     foreach ($pair in $ordered) {
-        $order = [int]$pair[0]
-        $seq = [int64]$pair[1]
+        $order = [int]$pair.Order
+        $seq = [int64]$pair.Seq
         if ($order -eq $StartExpected) {
+            Write-Verbose "Attempting Receive-SBDeferredMessage for order=$order seq=$seq"
             $dm = Receive-SBDeferredMessage -ServiceBusConnectionString $ConnStr -SequenceNumber $seq -Topic "NO_SESSION" -Subscription "NO_SESS_SUB"
             if (-not $dm) {
                 Write-Warning "Deferred msg seq=$seq order=$order not returned (expired/locked); will retry later"
-                $remaining.Add(@($order, $seq))
+                [void]$remaining.Add([SBPowerShell.Models.OrderSeq]::new($order, $seq))
                 continue
             }
 
             Write-Verbose "Processing deferred msg seq=$($dm.SequenceNumber) order=$order"
             Send-SBMessage -ServiceBusConnectionString $ConnStr -ReceivedInputObject $dm -Topic "ORDERED_TOPIC"
             Complete-InputMessage -ConnStr $ConnStr -Message $dm
-            $State.Value.lastSeenOrderNum = $order
+            $State.Value.LastSeenOrderNum = $order
             Write-Output $dm
             $StartExpected++
         }
         else {
-            $remaining.Add(@($order, $seq))
+            [void]$remaining.Add([SBPowerShell.Models.OrderSeq]::new($order, $seq))
         }
     }
-    $State.Value.deferred = $remaining
+    $State.Value.Deferred = $remaining
 }
 
 function Handle-InOrder {
@@ -124,11 +116,11 @@ function Handle-InOrder {
         [ref]$State
     )
 
-    Write-Verbose "In-order msg seq=$($Message.SequenceNumber) order=$($Message.ApplicationProperties['order']) expected=$($State.Value.lastSeenOrderNum + 1)"
+    Write-Verbose "In-order msg seq=$($Message.SequenceNumber) order=$($Message.ApplicationProperties['order']) expected=$($State.Value.LastSeenOrderNum + 1)"
     Send-SBMessage -ServiceBusConnectionString $ConnStr -ReceivedInputObject $Message -Topic "ORDERED_TOPIC"
     Complete-InputMessage -ConnStr $ConnStr -Message $Message
     $orderVal = [int]$Message.ApplicationProperties["order"]
-    $State.Value.lastSeenOrderNum = $orderVal
+    $State.Value.LastSeenOrderNum = $orderVal
     Write-Output $Message
 
     Drain-DeferredMessages -ConnStr $ConnStr -State $State -StartExpected ($orderVal + 1)
@@ -142,7 +134,7 @@ function Handle-OutOfOrder {
         [ref]$State
     )
 
-    $expectedOrderNum = $State.Value.lastSeenOrderNum + 1
+    $expectedOrderNum = $State.Value.LastSeenOrderNum + 1
     $orderVal = [int]$Message.ApplicationProperties["order"]
 
     Write-Verbose "Out-of-order msg seq=$($Message.SequenceNumber) order=$orderVal expected=$expectedOrderNum"
@@ -152,7 +144,7 @@ function Handle-OutOfOrder {
         return
     }
 
-    $State.Value.deferred += , @($orderVal, [int64]$Message.SequenceNumber)
+    [void]$State.Value.Deferred.Add([SBPowerShell.Models.OrderSeq]::new($orderVal, [int64]$Message.SequenceNumber))
     Defer-InputMessage -ConnStr $ConnStr -Message $Message
     Save-ReorderState -ConnStr $ConnStr -SessionId $Message.SessionId -State $State.Value
 }
@@ -167,10 +159,8 @@ function Initialize-FirstMessage {
     Send-SBMessage -ServiceBusConnectionString $ConnStr -ReceivedInputObject $Message -Topic "ORDERED_TOPIC"
     Complete-InputMessage -ConnStr $ConnStr -Message $Message
     Write-Output $Message
-    Save-ReorderState -ConnStr $ConnStr -SessionId $Message.SessionId -State @{
-        lastSeenOrderNum = [int]$Message.ApplicationProperties["order"]
-        deferred         = @()
-    }
+    $initialState = New-SBSessionState -LastSeenOrderNum ([int]$Message.ApplicationProperties["order"]) -Deferred @()
+    Save-ReorderState -ConnStr $ConnStr -SessionId $Message.SessionId -State $initialState
 }
 
 <#
@@ -208,12 +198,12 @@ function Process-Message {
         # получаем текущее состояние сессии (или создаём новое)
         $state = Get-ReorderState -ConnStr $ConnStr -SessionId $msg.SessionId
 
-        if ($state.lastSeenOrderNum -eq 0) {
+        if ($state.LastSeenOrderNum -eq 0) {
             Initialize-FirstMessage -ConnStr $ConnStr -Message $msg
             return
         }
 
-        $expectedOrderNum = $state.lastSeenOrderNum + 1
+        $expectedOrderNum = $state.LastSeenOrderNum + 1
         $stateRef = [ref]$state
 
         $orderVal = [int]$msg.ApplicationProperties["order"]
