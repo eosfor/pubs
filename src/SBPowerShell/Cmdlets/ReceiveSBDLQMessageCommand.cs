@@ -163,7 +163,7 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveFromReceiver(ServiceBusReceiver receiver, bool peek, bool noComplete, ReceivePlan plan, CancellationToken cancellationToken, bool disposeReceiver = true)
+    private void ReceiveFromReceiver(ServiceBusReceiver receiver, bool peek, bool noComplete, ReceivePlan plan, CancellationToken cancellationToken, bool disposeReceiver = true, bool isSessionReceiver = false)
     {
         try
         {
@@ -193,6 +193,12 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
 
                 if (messages.Count == 0)
                 {
+                    if (isSessionReceiver)
+                    {
+                        // release current session so another can be accepted
+                        break;
+                    }
+
                     if (plan.DeadlineReached)
                     {
                         return;
@@ -286,7 +292,7 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
 
             try
             {
-                ReceiveFromReceiver(sessionReceiver, peek, noComplete, plan, cancellationToken, disposeReceiver: false);
+                ReceiveFromReceiver(sessionReceiver, peek, noComplete, plan, cancellationToken, disposeReceiver: false, isSessionReceiver: true);
                 if (plan.IsComplete)
                 {
                     return;

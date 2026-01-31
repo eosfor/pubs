@@ -133,7 +133,9 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
         if (SessionContext is not null)
         {
-            ReceiveFromReceiver(SessionContext.Receiver, Peek, NoComplete, plan, cancellationToken, disposeReceiver: false);
+            var sessionCtxReceiver = SessionContext.Receiver;
+            var isSessionReceiver = sessionCtxReceiver is ServiceBusSessionReceiver;
+            ReceiveFromReceiver(sessionCtxReceiver, Peek, NoComplete, plan, cancellationToken, disposeReceiver: false, isSessionReceiver: isSessionReceiver);
             return;
         }
 
@@ -184,7 +186,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveFromReceiver(ServiceBusReceiver receiver, bool peek, bool noComplete, ReceivePlan plan, CancellationToken cancellationToken, bool disposeReceiver = true)
+    private void ReceiveFromReceiver(ServiceBusReceiver receiver, bool peek, bool noComplete, ReceivePlan plan, CancellationToken cancellationToken, bool disposeReceiver = true, bool isSessionReceiver = false)
     {
         try
         {
@@ -214,6 +216,12 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
                 if (messages.Count == 0)
                 {
+                    if (isSessionReceiver)
+                    {
+                        // release the current session to allow AcceptNextSessionAsync to pick another
+                        break;
+                    }
+
                     if (plan.DeadlineReached)
                     {
                         return;
@@ -315,7 +323,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
             try
             {
-                ReceiveFromReceiver(sessionReceiver, peek, noComplete, plan, cancellationToken, disposeReceiver: false);
+                ReceiveFromReceiver(sessionReceiver, peek, noComplete, plan, cancellationToken, disposeReceiver: false, isSessionReceiver: true);
                 if (plan.IsComplete)
                 {
                     return;
