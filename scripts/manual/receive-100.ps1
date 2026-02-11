@@ -43,7 +43,24 @@ Import-Module $modulePath -Force
 $connectionString = Get-ConnectionString
 
 Write-Host "Receiving up to 100 messages from test-topic/test-sub..."
-$received = @(Receive-SBMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $connectionString -MaxMessages 100 -BatchSize 20 -WaitSeconds 2)
+$buffer = [System.Collections.Generic.List[Azure.Messaging.ServiceBus.ServiceBusReceivedMessage]]::new()
+
+while ($buffer.Count -lt 100) {
+    $batch = @(Receive-SBMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $connectionString -BatchSize 20 -WaitSeconds 2)
+    if ($batch.Count -eq 0) {
+        break
+    }
+
+    foreach ($item in $batch) {
+        if ($buffer.Count -ge 100) {
+            break
+        }
+
+        $buffer.Add($item)
+    }
+}
+
+$received = @($buffer)
 
 Write-Host "Received $($received.Count) message(s):"
 $received | ForEach-Object {

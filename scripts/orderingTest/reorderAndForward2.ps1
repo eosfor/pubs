@@ -1,7 +1,8 @@
-# Вспомогательные функции для упорядочивания входного потока несессионных сообщений
-# с использованием псевдо-сессий: состояние хранится в session state сущности ORDERED_TOPIC/SESS_SUB
-# и содержит lastSeenOrderNum (int) и deferred (список пар [order, seqNumber]).
-# Первое полученное сообщение фиксирует стартовый order; всё, что имеет order меньше стартового, будет отложено и никогда не выйдет на выход.
+# Helper functions for reordering an incoming non-session message stream
+# using pseudo-sessions: state is stored in session state for ORDERED_TOPIC/SESS_SUB
+# and contains lastSeenOrderNum (int) and deferred (list of [order, seqNumber] pairs).
+# The first received message sets the starting order; anything below that start order
+# is treated as stale and does not appear on the ordered output.
 
 function Get-ReorderState {
     param(
@@ -165,8 +166,8 @@ function Initialize-FirstMessage {
 
 <#
 .SYNOPSIS
-    функция реализует подход из статьи: https://devblogs.microsoft.com/premier-developer/ordering-messages-in-azure-service-bus/
-    примеры кода: https://github.com/hgjura/blog-azuerservicebus-ordering
+    Implements the approach from: https://devblogs.microsoft.com/premier-developer/ordering-messages-in-azure-service-bus/
+    Reference code: https://github.com/hgjura/blog-azuerservicebus-ordering
 
 .DESCRIPTION
 Long description
@@ -195,7 +196,7 @@ function Process-Message {
     begin {}
     
     process {
-        # получаем текущее состояние сессии (или создаём новое)
+        # load current session state (or initialize a new one)
         $state = Get-ReorderState -ConnStr $ConnStr -SessionId $msg.SessionId
 
         if ($state.LastSeenOrderNum -eq 0) {
@@ -209,11 +210,11 @@ function Process-Message {
         $orderVal = [int]$msg.ApplicationProperties["order"]
 
         if ($orderVal -eq $expectedOrderNum) {
-            # сообщение пришло в ожидаемом порядке
+            # message arrived in expected order
             Handle-InOrder -ConnStr $ConnStr -Message $msg -State $stateRef
         }
         else {
-            # сообщение вне очереди — откладываем и сохраняем состояние
+            # message is out of order - defer and persist state
             Handle-OutOfOrder -ConnStr $ConnStr -Message $msg -State $stateRef
         }
     }

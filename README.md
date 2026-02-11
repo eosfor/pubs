@@ -1,5 +1,7 @@
 # pubs ![CI](https://github.com/eosfor/pubs/actions/workflows/ci.yml/badge.svg)
 
+[English version](README.EN.md)
+
 PowerShell‑модуль для работы с Azure Service Bus и локальным Service Bus Emulator.
 
 ## Что умеет
@@ -19,11 +21,13 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 ## Требования
 - .NET 8/9 SDK для сборки.
 - PowerShell 7+.
-- Для локального запуска — Service Bus Emulator + SQL Edge (`docker-compose.sbus.yml`) и `.env` с `SAS_KEY_VALUE` (опционально `EMULATOR_HOST`, `EMULATOR_HTTP_PORT`, `EMULATOR_AMQP_PORT`).
+- Для локального запуска — Service Bus Emulator + SQL Edge (`docker-compose.sbus.yml`) и `.env` с `SAS_KEY_VALUE`, `SQL_PASSWORD`, `ACCEPT_EULA` (опционально `EMULATOR_HOST`, `EMULATOR_HTTP_PORT`, `EMULATOR_AMQP_PORT`, `SQL_WAIT_INTERVAL`).
 
 Пример `.env`:
 ```
 SAS_KEY_VALUE=LocalEmulatorKey123!
+SQL_PASSWORD=Pa55w0rd1!
+ACCEPT_EULA=Y
 EMULATOR_HOST=localhost
 EMULATOR_HTTP_PORT=5300
 EMULATOR_AMQP_PORT=5672
@@ -59,12 +63,13 @@ Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnec
 - `-Subscription` требуется только при чтении из топика; для очереди этот параметр не используется.
 
 ### Поведение WaitSeconds
+- `-MaxMessages` и `-WaitSeconds` — взаимоисключающие режимы (разные parameter set); используйте только один из них в одном вызове.
 - `WaitSeconds` задаёт верхнюю границу ожидания для **одного** вызова получения: если за это окно нет сообщений, команда возвращает пустой список.
-- Это относится и к `MaxMessages=0` (по умолчанию) — первый пустой опрос завершит вызов.
+- Если не задан ни `-MaxMessages`, ни `-WaitSeconds`, команда выполняет непрерывный polling до отмены (например, `Ctrl+C`).
 - При длительном стриме вызывайте получение в цикле с нужными паузами/условиями:
   ```pwsh
   while ($true) {
-      $batch = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 50 -WaitSeconds 2
+      $batch = @(Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -BatchSize 50 -WaitSeconds 2)
       if ($batch.Count -eq 0) { break } # или своя логика выхода/сна
       # обработка $batch
   }
@@ -112,11 +117,11 @@ Receive-SBMessage -Queue "session-queue" -ServiceBusConnectionString $conn -MaxM
 
 Просмотр (peek) без удаления:
 ```pwsh
-$peeked = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek -WaitSeconds 1
+$peeked = Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek
 # сообщения остаются в очереди и могут быть получены позже обычным вызовом
 
 # Для топика:
-# $peeked = Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek -WaitSeconds 1
+# $peeked = Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnectionString $conn -MaxMessages 5 -Peek
 
 # Dead-letter очереди/подписки
 Receive-SBDLQMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Peek -MaxMessages 10
@@ -126,7 +131,8 @@ Receive-SBDLQMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBus
 Receive-SBDLQMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $conn -MaxMessages 10
 # Поведение: по умолчанию сообщения из DLQ завершаются (Complete) и удаляются; для чтения без удаления используйте -Peek.
 # Если нужно вручную подтвердить/переложить сообщения, задайте -NoComplete и прогоните через Set-SBMessage (как с обычной очередью).
-# MaxMessages=0 (значение по умолчанию) читает всё, что успеет до отмены/пустой выборки. Сессионные DLQ обрабатываются автоматически.
+# Без -MaxMessages и -WaitSeconds команда выполняет непрерывный polling до отмены (Ctrl+C).
+# Для ограниченного вызова используйте либо -MaxMessages, либо -WaitSeconds. Сессионные DLQ обрабатываются автоматически.
 ```
 
 Ручное подтверждение/отложка (settlements):
@@ -158,24 +164,49 @@ Close-SBSessionContext -Context $ctx
 ```
 
 ## Потоковая сортировка несессионного топика (`reorderAndForward2.ps1`)
-- Скрипт `scripts/orderingTest/reorderAndForward2.ps1` использует session state, чтобы переставить сообщения по `ApplicationProperties.order`, даже если входная подписка несессионная. Состояние хранится как DSO `SessionOrderingState` ( `LastSeenOrderNum:int`, `Deferred: List<OrderSeq{Order:int,Seq:long}>` ) в `ORDERED_TOPIC/SESS_SUB` (должна быть сессионной).
-- Первое полученное сообщение задаёт стартовый `order`; все сообщения с меньшим `order` будут отложены и не попадут на выход (их можно поднять вручную при необходимости).
-- Отправка (перемешать порядок):
+### Что делает
+Скрипт `scripts/orderingTest/reorderAndForward2.ps1` переупорядочивает входной поток сообщений из несессионной подписки (`NO_SESSION/NO_SESS_SUB`) по `ApplicationProperties.order`, используя session state в `ORDERED_TOPIC/SESS_SUB`.
+Состояние хранится как DSO `SessionOrderingState` (`LastSeenOrderNum:int`, `Deferred: List<OrderSeq{Order:int,Seq:long}>`), поэтому не требуется ручной `ConvertFrom/To-Json`.
+Выходные сообщения скрипт сам отправляет в `ORDERED_TOPIC`.
+
+### Зачем
+Подходит для сценария, когда источник не гарантирует порядок, но downstream-потребителю нужен упорядоченный поток.
+Скрипт держит отложенные сообщения в deferred до появления нужного `order`.
+Сообщения с `order` меньше текущего ожидаемого считаются устаревшими и уходят в DLQ.
+
+### Как попробовать
+1. Убедитесь, что в эмуляторе есть сущности `NO_SESSION/NO_SESS_SUB` и `ORDERED_TOPIC/SESS_SUB` (по умолчанию они есть в `emulator/config.json`).
+2. Откройте 2 окна PowerShell. В каждом загрузите модуль и подготовьте подключение. Во втором окне дополнительно загрузите скрипт:
+```pwsh
+$module = "src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1"
+Import-Module $module -Force
+$cs = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+
+# нужно в окне, где вызывается Process-Message
+. ./scripts/orderingTest/reorderAndForward2.ps1
+```
+3. Во втором окне запустите обработчик потока:
+```pwsh
+Receive-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $cs -NoComplete |
+    Process-Message -ConnStr $cs
+```
+4. В первом окне отправьте перемешанные сообщения (обязательны `SessionId` и integer-поле `order`):
 ```pwsh
 1..10 |
-  ForEach-Object { New-SBMessage -Body "hello world $_" -CustomProperties @{ prop = "v1"; order = [int]$_ } -SessionId "myLovelySession" } |
+  ForEach-Object { New-SBMessage -Body "hello world $_" -CustomProperties @{ order = [int]$_; prop = "v1" } -SessionId "myLovelySession" } |
   Sort-Object { Get-Random } |
-  ForEach-Object { Send-SBMessage -ServiceBusConnectionString $cs -Topic "NO_SESSION" -Message $_; Start-Sleep -Milliseconds 1500 }
+  ForEach-Object { $_; Send-SBMessage -ServiceBusConnectionString $cs -Topic "NO_SESSION" -Message $_; Start-Sleep -Milliseconds 1500 }
 ```
-- Получение и упорядочивание:
+5. Остановите обработчик во втором окне через `Ctrl+C`, когда отправка завершена.
+6. Проверьте упорядоченный выход:
 ```pwsh
-. ./scripts/orderingTest/reorderAndForward2.ps1
-Receive-SBMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $cs -NoComplete |
-    Process-Message -ConnStr $cs -Verbose
+$ordered = @(Receive-SBMessage -Topic "ORDERED_TOPIC" -Subscription "SESS_SUB" -ServiceBusConnectionString $cs -MaxMessages 20)
+$ordered | Select-Object @{N='order';E={$_.ApplicationProperties['order']}}, SessionId, SequenceNumber, @{N='Body';E={$_.Body.ToString()}}
 ```
-- `Process-Message` сам отправляет упорядоченные сообщения в `ORDERED_TOPIC` и выводит их в конвейер для проверки/логирования; дополнительный `Send-SBMessage` после него не нужен.
-- Мини-пример эффекта стартового order: если первым пришёл `order=4`, то сообщения с `order 1..3` будут отложены навсегда, а поток на выход пойдёт с 4,5,6...
-> Внутри скрипт больше не делает `ConvertFrom/To-Json`: `Get/Set-SBSessionState` работают с DSO, поэтому не происходит потеря вложенных массивов и выпадение `MessageNotFound` при чтении deferred.
+7. При необходимости посмотрите DLQ для устаревших `order`:
+```pwsh
+Receive-SBDLQMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBusConnectionString $cs -Peek -MaxMessages 20
+```
 
 ## Полная перезагрузка эмулятора
 ```bash

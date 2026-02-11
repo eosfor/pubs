@@ -50,7 +50,7 @@ public static class SessionOrderingStateSerializer
 
             if (!hasLastSeen && !hasDeferred)
             {
-                return null; // не наша схема — вернём строкой в cmdlet
+                return null; // not our schema - cmdlet will return it as string
             }
 
             return FromJsonDocument(root);

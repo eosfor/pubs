@@ -314,7 +314,7 @@ Describe "SBPowerShell cmdlets against emulator" {
 
     It "reads dead-letter queue messages for a queue" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
-        # не зависать в пустой DLQ: одноразовый опрос с тайм-аутом
+        # avoid hanging on an empty DLQ: run a single timed poll
         Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
 
         $messages = New-SBMessage -Body 'dlq-queue'
@@ -348,7 +348,7 @@ Describe "SBPowerShell cmdlets against emulator" {
 
     It "reads dead-letter queue messages for a subscription" {
         Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
-        # чтобы не крутиться в Receive-SBDLQMessage при пустой DLQ — короткий опрос с тайм-аутом
+        # avoid looping in Receive-SBDLQMessage on empty DLQ: short timed poll
         Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
 
         $messages = New-SBMessage -Body 'dlq-sub'
