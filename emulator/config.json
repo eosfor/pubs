@@ -122,6 +122,18 @@
                   "ForwardDeadLetteredMessagesTo": "",
                   "MaxDeliveryCount": 10
                 }
+              },
+                            {
+                "Name": "SYSTEM_SUB",
+                "Properties": {
+                  "DeadLetteringOnMessageExpiration": false,
+                  "DefaultMessageTimeToLive": "PT1H",
+                  "LockDuration": "PT1M",
+                  "RequiresSession": true,
+                  "ForwardTo": "",
+                  "ForwardDeadLetteredMessagesTo": "",
+                  "MaxDeliveryCount": 10
+                }
               }
             ]
           }
