@@ -250,6 +250,12 @@ pwsh ./scripts/stress/inspect-state-sub.ps1 -ConnStr $cs -SessionId $sid
 - Для этого сценария в `emulator/config.json` добавлена сессионная подписка `NO_SESSION/STATE_SUB`.
 - Если сессия уже в hard-fail (невозможно открыть `AcceptSession`), recovery через `SessionContext` не сработает: сначала нужен внешний runbook/репаблиш в новую сессию.
 
+Документы по инциденту переполнения session state:
+- `scripts/stress/SESSION_STATE_OVERFLOW_RECOVERY_RUNBOOK.ru.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RECOVERY_RUNBOOK.en.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RUN_REPORT.ru.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RUN_REPORT.en.md`
+
 ## Потоковая сортировка несессионного топика (`reorderAndForward2.ps1`)
 ### Что делает
 Скрипт `scripts/orderingTest/reorderAndForward2.ps1` переупорядочивает входной поток сообщений из несессионной подписки (`NO_SESSION/NO_SESS_SUB`) по `ApplicationProperties.order`, используя session state в `ORDERED_TOPIC/SESS_SUB`.
