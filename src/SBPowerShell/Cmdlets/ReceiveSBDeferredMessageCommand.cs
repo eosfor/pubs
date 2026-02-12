@@ -2,6 +2,7 @@ using System.Management.Automation;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using SBPowerShell.Internal;
 using SBPowerShell.Models;
 
 namespace SBPowerShell.Cmdlets;
@@ -92,6 +93,7 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
 
     private void ReceiveWithContext()
     {
+        using var renewer = SessionLockAutoRenewer.Start(SessionContext!.Receiver, _cts.Token);
         foreach (var chunk in ChunkSequenceNumbers())
         {
             var messages = SessionContext!.Receiver.ReceiveDeferredMessagesAsync(chunk, _cts.Token)
@@ -139,6 +141,7 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
 
         try
         {
+            using var renewer = SessionLockAutoRenewer.Start(sessionReceiver, _cts.Token);
             foreach (var chunk in ChunkSequenceNumbers())
             {
                 var messages = sessionReceiver.ReceiveDeferredMessagesAsync(chunk, _cts.Token)

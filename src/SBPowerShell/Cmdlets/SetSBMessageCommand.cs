@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using SBPowerShell.Internal;
 
 namespace SBPowerShell.Cmdlets;
 
@@ -122,6 +123,7 @@ public sealed class SetSBMessageCommand : PSCmdlet
 
         if (SessionContext is not null)
         {
+            using var renewer = SessionLockAutoRenewer.Start(SessionContext.Receiver, cancellationToken);
             foreach (var msg in _messages)
             {
                 await SettleAsync(SessionContext.Receiver, msg, action, cancellationToken);
@@ -160,6 +162,7 @@ public sealed class SetSBMessageCommand : PSCmdlet
                 try
                 {
                     await using var sessionReceiver = await CreateSessionReceiverAsync(client, group.Key, cancellationToken);
+                    using var renewer = SessionLockAutoRenewer.Start(sessionReceiver, cancellationToken);
                     foreach (var msg in group)
                     {
                         await SettleAsync(sessionReceiver, msg, action, cancellationToken);

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using SBPowerShell.Internal;
 using SBPowerShell.Models;
 
 namespace SBPowerShell.Cmdlets;
@@ -49,6 +50,7 @@ public sealed class SetSBSessionStateCommand : PSCmdlet
             EnsureConnectionString();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             using var scope = CreateReceiver(cts.Token, out var receiver);
+            using var renewer = SessionLockAutoRenewer.Start(receiver, cts.Token);
 
             var binary = ToBinaryData(State);
             receiver.SetSessionStateAsync(binary, cts.Token).GetAwaiter().GetResult();
