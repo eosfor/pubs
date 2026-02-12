@@ -1,5 +1,11 @@
 # Session State Overflow Incident Report (RU)
 
+## Verdict
+- Статус метода ручного восстановления из текущего runbook: **частично работает**.
+- Подтверждено: `Emergency compact` восстанавливает возможность записи session state.
+- Не подтверждено: полное восстановление порядка и данных через replay из `Deferred[]` (`MessageNotFound` в sample 100%).
+- Вывод: для надежного ручного восстановления нужен обновленный процесс (`Recovery v2`) с внешним durable spillover/replay.
+
 ## 1. Контекст
 - Сессия: `stress-session-224041`
 - Вход: `NO_SESSION/STATE_SUB`

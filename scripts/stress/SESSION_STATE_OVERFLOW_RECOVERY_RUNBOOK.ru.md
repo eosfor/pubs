@@ -40,6 +40,28 @@
 - `Cutover`: `LastSeen` растет, `DeferredCount` не растет взрывно
 - `Rollback`: `LastSeen` не растет, `DeferredCount` быстро растет (риск повторного overflow)
 
+## Изменение процесса для ручного восстановления (Recovery v2)
+Цель `v2`: сделать ручное восстановление повторяемым и предсказуемым даже когда `Deferred[]` в state stale.
+
+### Режим A (рекомендуется): без потерь
+1. `Freeze`: остановить producer/consumer по `SessionId`.
+2. Снять `state.before.json` и сохранить run артефакты.
+3. Выполнить `Emergency compact` (`Deferred=[]`) только для снятия аварийности state.
+4. Выгрузить активные сообщения сессии в внешний recovery-buffer (queue/topic/storage), при выгрузке завершать оригиналы.
+5. Переключить живой трафик на новый `SessionId` (cutover), чтобы прод не стоял.
+6. Отдельно переиграть recovery-buffer через упорядочивающий pipeline с внешним durable state.
+
+### Режим B: быстрый запуск (допустима контролируемая потеря)
+1. `Emergency compact`.
+2. Установить согласованный `LastSeen` (операционный checkpoint).
+3. Запустить consumer и мониторить темп роста `Deferred`.
+4. Если `Deferred` снова растет взрывно, вернуться к Режиму A.
+
+### Что нужно добавить в процесс/инструменты
+- Отдельный `export/drain` скрипт: active session messages -> recovery-buffer (copy+complete).
+- Явный `cutover` scriptbook: новый `SessionId`, freeze окна, rollback-критерии.
+- Внешний durable storage для deferred index/replay (чтобы не упираться в 256 KiB session state).
+
 ## Диаграммы процесса восстановления
 
 ### 1) Основной flow (phase-gate)
@@ -80,6 +102,23 @@ sequenceDiagram
     Ops->>C: Start canary consumer
     C->>SB: Receive/Defer/Set state
     Ops->>Ops: Decision: cutover or rollback
+```
+
+### 3) Decision flow для Recovery v2
+```mermaid
+flowchart TD
+    A["Recovery attempt started"] --> B{"Deferred replay recoverable?"}
+    B -- "Yes" --> C["Replay + settle + canary"]
+    B -- "No" --> D["Mark stale deferred index"]
+    D --> E{"Need no-loss recovery?"}
+    E -- "Yes" --> F["Mode A: export to recovery-buffer + cutover new SessionId"]
+    E -- "No" --> G["Mode B: compact + checkpoint LastSeen + restart"]
+    C --> H["Observe metrics"]
+    F --> H
+    G --> H
+    H --> I{"Deferred growth stable?"}
+    I -- "Yes" --> J["Continue operations"]
+    I -- "No" --> K["Escalate to Mode A / external replay"]
 ```
 
 ## Команда запуска recovery

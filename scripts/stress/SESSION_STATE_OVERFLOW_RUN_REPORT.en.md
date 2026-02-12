@@ -1,5 +1,11 @@
 # Session State Overflow Incident Report (EN)
 
+## Verdict
+- Current manual-recovery method status: **partially working**.
+- Confirmed: `Emergency compact` restores the ability to persist session state.
+- Not confirmed: full order/data restoration via replay from `Deferred[]` (`MessageNotFound` in 100% sampled probes).
+- Conclusion: reliable manual recovery requires an updated process (`Recovery v2`) with external durable spillover/replay.
+
 ## 1. Context
 - Session: `stress-session-224041`
 - Input: `NO_SESSION/STATE_SUB`
