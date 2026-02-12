@@ -161,6 +161,65 @@ Set-SBSessionState -SessionContext $ctx -State @{ Progress = 42 }
 Close-SBSessionContext -Context $ctx
 ```
 
+Deferred -> active recovery within one session:
+```pwsh
+param(
+    [Parameter(Mandatory)] [string]$ConnStr,
+    [Parameter(Mandatory)] [string]$SessionId,
+    [string]$Topic = "NO_SESSION",
+    [string]$Subscription = "STATE_SUB",
+    [string]$SnapDir = "./out",
+    [int]$ChunkSize = 200,
+    [int]$BatchSize = 100
+)
+
+$ErrorActionPreference = "Stop"
+New-Item -ItemType Directory -Path $SnapDir -Force | Out-Null
+$snapFile = Join-Path $SnapDir "state.$SessionId.before.json"
+
+$ctx = New-SBSessionContext -Topic $Topic -Subscription $Subscription -SessionId $SessionId -ServiceBusConnectionString $ConnStr
+try {
+    # 1) backup state
+    $stateJson = Get-SBSessionState -SessionContext $ctx -AsString
+    $stateJson | Set-Content $snapFile -Encoding UTF8
+    $state = $stateJson | ConvertFrom-Json
+
+    # 2) collect deferred sequence numbers
+    $seqs = @(
+        $state.Deferred | ForEach-Object {
+            if ($_.PSObject.Properties.Name -contains "SeqNumber") { [int64]$_.SeqNumber }
+            elseif ($_.PSObject.Properties.Name -contains "seq")   { [int64]$_.seq }
+            elseif ($_.PSObject.Properties.Name -contains "Seq")   { [int64]$_.Seq }
+        }
+    ) | Where-Object { $_ -ne $null }
+
+    if ($seqs.Count -gt 0) {
+        # 3) deferred -> send active copy -> complete old deferred
+        Receive-SBDeferredMessage -SessionContext $ctx -SequenceNumber $seqs -ChunkSize $ChunkSize |
+            Send-SBMessage -SessionContext $ctx -BatchSize $BatchSize -PassThru |
+            Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+    }
+
+    # 4) clear deferred in state (supports both LastSeenOrder and LastSeenOrderNum)
+    $lastSeen = if ($state.PSObject.Properties.Name -contains "LastSeenOrder") {
+        [int]$state.LastSeenOrder
+    } else {
+        [int]$state.LastSeenOrderNum
+    }
+
+    if ($state.PSObject.Properties.Name -contains "LastSeenOrder") {
+        $newState = @{ LastSeenOrder = $lastSeen; Deferred = @() }
+    } else {
+        $newState = @{ LastSeenOrderNum = $lastSeen; Deferred = @() }
+    }
+
+    Set-SBSessionState -SessionContext $ctx -State ($newState | ConvertTo-Json -Compress)
+}
+finally {
+    Close-SBSessionContext -Context $ctx
+}
+```
+
 ## Streaming Reorder for a Non-Session Topic (`reorderAndForward2.ps1`)
 ### What It Does
 `scripts/orderingTest/reorderAndForward2.ps1` reorders incoming messages from a non-session subscription (`NO_SESSION/NO_SESS_SUB`) by `ApplicationProperties.order`, using session state in `ORDERED_TOPIC/SESS_SUB`.

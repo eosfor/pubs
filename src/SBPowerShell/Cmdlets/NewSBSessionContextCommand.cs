@@ -42,7 +42,22 @@ public sealed class NewSBSessionContextCommand : PSCmdlet
                 : client.AcceptSessionAsync(Topic, Subscription, SessionId).GetAwaiter().GetResult();
 
             var entityPath = ParameterSetName == ParameterSetQueue ? Queue : $"{Topic}/Subscriptions/{Subscription}";
-            var ctx = new SessionContext(ServiceBusConnectionString, entityPath, SessionId, client, receiver);
+            var ctx = ParameterSetName == ParameterSetQueue
+                ? new SessionContext(
+                    ServiceBusConnectionString,
+                    entityPath,
+                    SessionId,
+                    client,
+                    receiver,
+                    queueName: Queue)
+                : new SessionContext(
+                    ServiceBusConnectionString,
+                    entityPath,
+                    SessionId,
+                    client,
+                    receiver,
+                    topicName: Topic,
+                    subscriptionName: Subscription);
             WriteObject(ctx);
         }
         catch (Exception ex)

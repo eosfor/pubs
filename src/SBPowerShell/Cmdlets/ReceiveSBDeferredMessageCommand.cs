@@ -23,6 +23,10 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
     [ValidateNotNullOrEmpty]
     public long[] SequenceNumber { get; set; } = Array.Empty<long>();
 
+    [Parameter]
+    [ValidateRange(1, 1000)]
+    public int ChunkSize { get; set; } = 200;
+
     [Parameter(ParameterSetName = ParameterSetQueue)]
     [ValidateNotNullOrEmpty]
     public string? Queue { get; set; }
@@ -88,13 +92,16 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
 
     private void ReceiveWithContext()
     {
-        var messages = SessionContext!.Receiver.ReceiveDeferredMessagesAsync(SequenceNumber, _cts.Token)
-            .GetAwaiter()
-            .GetResult();
-
-        foreach (var msg in messages)
+        foreach (var chunk in ChunkSequenceNumbers())
         {
-            WriteObject(msg);
+            var messages = SessionContext!.Receiver.ReceiveDeferredMessagesAsync(chunk, _cts.Token)
+                .GetAwaiter()
+                .GetResult();
+
+            foreach (var msg in messages)
+            {
+                WriteObject(msg);
+            }
         }
     }
 
@@ -106,13 +113,16 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
 
         try
         {
-            var messages = receiver.ReceiveDeferredMessagesAsync(SequenceNumber, _cts.Token)
-                .GetAwaiter()
-                .GetResult();
-
-            foreach (var msg in messages)
+            foreach (var chunk in ChunkSequenceNumbers())
             {
-                WriteObject(msg);
+                var messages = receiver.ReceiveDeferredMessagesAsync(chunk, _cts.Token)
+                    .GetAwaiter()
+                    .GetResult();
+
+                foreach (var msg in messages)
+                {
+                    WriteObject(msg);
+                }
             }
         }
         finally
@@ -129,18 +139,32 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
 
         try
         {
-            var messages = sessionReceiver.ReceiveDeferredMessagesAsync(SequenceNumber, _cts.Token)
-                .GetAwaiter()
-                .GetResult();
-
-            foreach (var msg in messages)
+            foreach (var chunk in ChunkSequenceNumbers())
             {
-                WriteObject(msg);
+                var messages = sessionReceiver.ReceiveDeferredMessagesAsync(chunk, _cts.Token)
+                    .GetAwaiter()
+                    .GetResult();
+
+                foreach (var msg in messages)
+                {
+                    WriteObject(msg);
+                }
             }
         }
         finally
         {
             sessionReceiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+
+    private IEnumerable<long[]> ChunkSequenceNumbers()
+    {
+        for (var i = 0; i < SequenceNumber.Length; i += ChunkSize)
+        {
+            var size = Math.Min(ChunkSize, SequenceNumber.Length - i);
+            var chunk = new long[size];
+            Array.Copy(SequenceNumber, i, chunk, 0, size);
+            yield return chunk;
         }
     }
 
