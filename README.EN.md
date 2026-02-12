@@ -220,6 +220,34 @@ finally {
 }
 ```
 
+Stress test for full cycle (producer + consumer + recovery):
+```pwsh
+# Window 1: producer (send 10k, keep a gap at order=2)
+$cs = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+$sid = "stress-session-1"
+pwsh ./scripts/stress/send-state-sub-load.ps1 -ConnStr $cs -SessionId $sid -TotalMessages 10000
+
+# Window 2: consumer (crash when Deferred grows to simulate failure)
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid -CrashDeferredThreshold 3000
+
+# After producer is done, send missing order=2:
+$m2 = New-SBMessage -Body (@{ sessionId = $sid; order = 2 } | ConvertTo-Json -Compress) -SessionId $sid -CustomProperties @{ order = 2; sessionId = $sid }
+Send-SBMessage -ServiceBusConnectionString $cs -Topic "NO_SESSION" -Message $m2
+
+# Recovery deferred -> active:
+pwsh ./scripts/stress/recover-state-sub-deferred.ps1 -ConnStr $cs -SessionId $sid -Topic "NO_SESSION" -Subscription "STATE_SUB"
+
+# Run consumer again to drain recovered active messages:
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid
+
+# Diagnostics:
+pwsh ./scripts/stress/inspect-state-sub.ps1 -ConnStr $cs -SessionId $sid
+```
+
+Notes:
+- This scenario uses `NO_SESSION/STATE_SUB` (session-enabled), added to `emulator/config.json`.
+- If the session is already in hard-fail (`AcceptSession` cannot open), `SessionContext` recovery will not work; use an external runbook / republish into a new session first.
+
 ## Streaming Reorder for a Non-Session Topic (`reorderAndForward2.ps1`)
 ### What It Does
 `scripts/orderingTest/reorderAndForward2.ps1` reorders incoming messages from a non-session subscription (`NO_SESSION/NO_SESS_SUB`) by `ApplicationProperties.order`, using session state in `ORDERED_TOPIC/SESS_SUB`.

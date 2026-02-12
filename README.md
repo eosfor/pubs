@@ -222,6 +222,34 @@ finally {
 }
 ```
 
+Stress-проверка полного цикла (producer + consumer + recovery):
+```pwsh
+# Окно 1: producer (отправить 10k, оставить "дыру" по order=2)
+$cs = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+$sid = "stress-session-1"
+pwsh ./scripts/stress/send-state-sub-load.ps1 -ConnStr $cs -SessionId $sid -TotalMessages 10000
+
+# Окно 2: consumer (падение при росте Deferred, чтобы имитировать сбой)
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid -CrashDeferredThreshold 3000
+
+# Когда producer закончил, отправляем missing order=2:
+$m2 = New-SBMessage -Body (@{ sessionId = $sid; order = 2 } | ConvertTo-Json -Compress) -SessionId $sid -CustomProperties @{ order = 2; sessionId = $sid }
+Send-SBMessage -ServiceBusConnectionString $cs -Topic "NO_SESSION" -Message $m2
+
+# Recovery deferred -> active:
+pwsh ./scripts/stress/recover-state-sub-deferred.ps1 -ConnStr $cs -SessionId $sid -Topic "NO_SESSION" -Subscription "STATE_SUB"
+
+# Запускаем consumer снова, чтобы дренировать восстановленные active:
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid
+
+# Диагностика:
+pwsh ./scripts/stress/inspect-state-sub.ps1 -ConnStr $cs -SessionId $sid
+```
+
+Примечание:
+- Для этого сценария в `emulator/config.json` добавлена сессионная подписка `NO_SESSION/STATE_SUB`.
+- Если сессия уже в hard-fail (невозможно открыть `AcceptSession`), recovery через `SessionContext` не сработает: сначала нужен внешний runbook/репаблиш в новую сессию.
+
 ## Потоковая сортировка несессионного топика (`reorderAndForward2.ps1`)
 ### Что делает
 Скрипт `scripts/orderingTest/reorderAndForward2.ps1` переупорядочивает входной поток сообщений из несессионной подписки (`NO_SESSION/NO_SESS_SUB`) по `ApplicationProperties.order`, используя session state в `ORDERED_TOPIC/SESS_SUB`.
