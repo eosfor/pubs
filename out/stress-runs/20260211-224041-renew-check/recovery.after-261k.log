@@ -1,0 +1,8 @@
+Deferred sequence count: 8098
+Set-SBMessage: /Users/andrei/repo/pubs/out/stress-runs/20260211-224041-renew-check/recover-state-sub-deferred.fixed.ps1:40
+Line |
+  40 |              Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+     |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | The session lock has expired on the MessageSession. Accept a new
+     | MessageSession. TrackingId:cfab914000050001000015bd698d83ac_G0_B0,
+     | SystemTracker:gi::G0:5563:amqp://localhost/-e3ed40f7;0:5:6:source(address:/NO_SESSION/Subscriptions/STATE_SUB,filter:[com.microsoft:session-filter:stress-session-224041]), bi::in-connection156(G0-157)::session159::link5565, Timestamp:2026-02-12T07:41:37 (SessionLockLost). For troubleshooting information, see https://aka.ms/azsdk/net/servicebus/exceptions/troubleshoot.

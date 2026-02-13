@@ -163,6 +163,99 @@ Set-SBSessionState -SessionContext $ctx -State @{ Progress = 42 }
 Close-SBSessionContext -Context $ctx
 ```
 
+Восстановление deferred -> active в рамках одной сессии:
+```pwsh
+param(
+    [Parameter(Mandatory)] [string]$ConnStr,
+    [Parameter(Mandatory)] [string]$SessionId,
+    [string]$Topic = "NO_SESSION",
+    [string]$Subscription = "STATE_SUB",
+    [string]$SnapDir = "./out",
+    [int]$ChunkSize = 200,
+    [int]$BatchSize = 100
+)
+
+$ErrorActionPreference = "Stop"
+New-Item -ItemType Directory -Path $SnapDir -Force | Out-Null
+$snapFile = Join-Path $SnapDir "state.$SessionId.before.json"
+
+$ctx = New-SBSessionContext -Topic $Topic -Subscription $Subscription -SessionId $SessionId -ServiceBusConnectionString $ConnStr
+try {
+    # 1) backup state
+    $stateJson = Get-SBSessionState -SessionContext $ctx -AsString
+    $stateJson | Set-Content $snapFile -Encoding UTF8
+    $state = $stateJson | ConvertFrom-Json
+
+    # 2) collect deferred sequence numbers
+    $seqs = @(
+        $state.Deferred | ForEach-Object {
+            if ($_.PSObject.Properties.Name -contains "SeqNumber") { [int64]$_.SeqNumber }
+            elseif ($_.PSObject.Properties.Name -contains "seq")   { [int64]$_.seq }
+            elseif ($_.PSObject.Properties.Name -contains "Seq")   { [int64]$_.Seq }
+        }
+    ) | Where-Object { $_ -ne $null }
+
+    if ($seqs.Count -gt 0) {
+        # 3) deferred -> send active copy -> complete old deferred
+        Receive-SBDeferredMessage -SessionContext $ctx -SequenceNumber $seqs -ChunkSize $ChunkSize |
+            Send-SBMessage -SessionContext $ctx -BatchSize $BatchSize -PassThru |
+            Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+    }
+
+    # 4) clear deferred in state (supports both LastSeenOrder and LastSeenOrderNum)
+    $lastSeen = if ($state.PSObject.Properties.Name -contains "LastSeenOrder") {
+        [int]$state.LastSeenOrder
+    } else {
+        [int]$state.LastSeenOrderNum
+    }
+
+    if ($state.PSObject.Properties.Name -contains "LastSeenOrder") {
+        $newState = @{ LastSeenOrder = $lastSeen; Deferred = @() }
+    } else {
+        $newState = @{ LastSeenOrderNum = $lastSeen; Deferred = @() }
+    }
+
+    Set-SBSessionState -SessionContext $ctx -State ($newState | ConvertTo-Json -Compress)
+}
+finally {
+    Close-SBSessionContext -Context $ctx
+}
+```
+
+Stress-проверка полного цикла (producer + consumer + recovery):
+```pwsh
+# Окно 1: producer (отправить 10k, оставить "дыру" по order=2)
+$cs = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+$sid = "stress-session-1"
+pwsh ./scripts/stress/send-state-sub-load.ps1 -ConnStr $cs -SessionId $sid -TotalMessages 10000
+
+# Окно 2: consumer (падение при росте Deferred, чтобы имитировать сбой)
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid -CrashDeferredThreshold 3000
+
+# Когда producer закончил, отправляем missing order=2:
+$m2 = New-SBMessage -Body (@{ sessionId = $sid; order = 2 } | ConvertTo-Json -Compress) -SessionId $sid -CustomProperties @{ order = 2; sessionId = $sid }
+Send-SBMessage -ServiceBusConnectionString $cs -Topic "NO_SESSION" -Message $m2
+
+# Recovery deferred -> active:
+pwsh ./scripts/stress/recover-state-sub-deferred.ps1 -ConnStr $cs -SessionId $sid -Topic "NO_SESSION" -Subscription "STATE_SUB"
+
+# Запускаем consumer снова, чтобы дренировать восстановленные active:
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid
+
+# Диагностика:
+pwsh ./scripts/stress/inspect-state-sub.ps1 -ConnStr $cs -SessionId $sid
+```
+
+Примечание:
+- Для этого сценария в `emulator/config.json` добавлена сессионная подписка `NO_SESSION/STATE_SUB`.
+- Если сессия уже в hard-fail (невозможно открыть `AcceptSession`), recovery через `SessionContext` не сработает: сначала нужен внешний runbook/репаблиш в новую сессию.
+
+Документы по инциденту переполнения session state:
+- `scripts/stress/SESSION_STATE_OVERFLOW_RECOVERY_RUNBOOK.ru.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RECOVERY_RUNBOOK.en.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RUN_REPORT.ru.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RUN_REPORT.en.md`
+
 ## Потоковая сортировка несессионного топика (`reorderAndForward2.ps1`)
 ### Что делает
 Скрипт `scripts/orderingTest/reorderAndForward2.ps1` переупорядочивает входной поток сообщений из несессионной подписки (`NO_SESSION/NO_SESS_SUB`) по `ApplicationProperties.order`, используя session state в `ORDERED_TOPIC/SESS_SUB`.

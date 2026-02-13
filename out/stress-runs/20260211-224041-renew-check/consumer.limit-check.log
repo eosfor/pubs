@@ -1,0 +1,8 @@
+Loaded state: LastSeenOrder=1 DeferredCount=7912
+Set-SBSessionState: /Users/andrei/repo/pubs/out/stress-runs/20260211-224041-renew-check/run-state-sub-consumer.ps1:50
+Line |
+  50 |      Set-SBSessionState -SessionContext $script:ctx -State $payload
+     |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | The operation is canceled because the owner is being closed.
+     | (ServiceTimeout). For troubleshooting information, see
+     | https://aka.ms/azsdk/net/servicebus/exceptions/troubleshoot.

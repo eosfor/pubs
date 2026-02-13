@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using SBPowerShell.Internal;
 using SBPowerShell.Models;
 
 namespace SBPowerShell.Cmdlets;
@@ -68,6 +69,7 @@ public sealed class GetSBSessionStateCommand : PSCmdlet
 
             try
             {
+                using var renewer = SessionLockAutoRenewer.Start(receiver, cts.Token);
                 var state = receiver.GetSessionStateAsync(cts.Token).GetAwaiter().GetResult();
                 if (state is null)
                 {
