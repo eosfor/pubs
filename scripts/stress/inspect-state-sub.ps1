@@ -8,9 +8,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$module = "src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1"
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot ".." "..")).Path
+$module = Join-Path $repoRoot "src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1"
 if (-not (Test-Path $module)) {
-    $module = "src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1"
+    $module = Join-Path $repoRoot "src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1"
 }
 Import-Module $module -Force
 
