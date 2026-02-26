@@ -17,6 +17,7 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 - `Clear-SBQueue`, `Clear-SBSubscription` — очистка очереди или подписки пакетами.
 - `Get-SBTopic` — список топиков с метаданными из SDK (`TopicProperties`) и runtime-информацией.
 - `Get-SBSubscription` — список подписок указанного топика с метаданными (`SubscriptionProperties`) и runtime-данными, включая количество сообщений.
+- `Get-SBSession` — перечисление session id для queue или topic/subscription через low-level AMQP management operation.
 
 ## Требования
 - .NET 8/9 SDK для сборки.
@@ -102,6 +103,48 @@ Receive-SBMessage -Queue "session-queue" -ServiceBusConnectionString $conn -MaxM
 # Send-SBMessage -Topic "session-topic" -Message ($s1 + $s2) -ServiceBusConnectionString $conn -PerSessionThreadAuto
 # Receive-SBMessage -Topic "session-topic" -Subscription "session-sub" -ServiceBusConnectionString $conn -MaxMessages 6
 ```
+
+Просмотр сессий (`Get-SBSession`) и ручная проверка на реальном Azure Service Bus:
+```pwsh
+# 1) Подключение к реальному namespace (SAS policy с правами как минимум Listen на сущность;
+#    для создания/очистки сущностей и записи session state удобно использовать Manage)
+$conn = "Endpoint=sb://<your-namespace>.servicebus.windows.net/;SharedAccessKeyName=<policy>;SharedAccessKey=<key>"
+
+# 2) Убедитесь, что подписка требует сессии (RequiresSession=true), например:
+#    Topic: SESSION
+#    Subscription: SESS_SUB
+
+# 3) Отправьте тестовые сообщения в несколько сессий
+$m1 = New-SBMessage -SessionId "manual-sess-1" -Body "one","two"
+$m2 = New-SBMessage -SessionId "manual-sess-2" -Body "three","four"
+Send-SBMessage -Topic "SESSION" -Message ($m1 + $m2) -ServiceBusConnectionString $conn -PerSessionThreadAuto
+
+# 4) Получить сессии топика/подписки (cmdlet из задачи)
+Get-SBSession -ServiceBusConnectionString $conn -Topic "SESSION" -Subscription "SESS_SUB"
+
+# 5) Legacy-совместимый режим (Track1 GetMessageSessions())
+Get-SBSession -ServiceBusConnectionString $conn -Topic "SESSION" -Subscription "SESS_SUB" -ActiveOnly
+
+# 6) По session state (если вы обновляете state):
+#    сначала обновим state для конкретной сессии, потом отфильтруем по времени
+Set-SBSessionState -ServiceBusConnectionString $conn -Topic "SESSION" -Subscription "SESS_SUB" -SessionId "manual-sess-1" -State @{ Probe = 1 }
+Get-SBSession -ServiceBusConnectionString $conn -Topic "SESSION" -Subscription "SESS_SUB" -LastUpdatedSince (Get-Date).AddHours(-1)
+
+# 7) Проверка результата: взять один SessionId из выдачи и прочитать сообщения именно из этой сессии
+$ctx = New-SBSessionContext -Topic "SESSION" -Subscription "SESS_SUB" -SessionId "manual-sess-1" -ServiceBusConnectionString $conn
+Receive-SBMessage -SessionContext $ctx -MaxMessages 10
+Close-SBSessionContext -Context $ctx
+```
+
+Замечания:
+- `Get-SBSession` использует low-level AMQP management operation `com.microsoft:get-message-sessions`.
+- `-LastUpdatedSince` ориентирован на обновления session state.
+- `-ActiveOnly` оставлен для совместимости с legacy Track1 API (`GetMessageSessions()`), но на wire уровне мапится на тот же sentinel (`DateTime.MaxValue`), что и вызов по умолчанию.
+- Режим без `-ActiveOnly`/`-LastUpdatedSince` пытается запросить "все" сессии через sentinel `DateTime.MaxValue`; поведение зависит от сервиса/эмулятора.
+
+Подробное описание реализации (`CBS`, AMQP management, wire-поля, отличия Azure/Emulator):
+- [`sessions.md`](sessions.md) — русский
+- [`sessions.en.md`](sessions.en.md) — English
 
 Создание сообщений в цикле с явным приведением типов:
 ```pwsh

@@ -383,6 +383,42 @@ public class ServiceBusFixture : IAsyncLifetime
         return result;
     }
 
+    public SBSessionInfo[] GetSessions(
+        string? queue = null,
+        string? topic = null,
+        string? subscription = null,
+        bool activeOnly = false,
+        DateTime? lastUpdatedSince = null)
+    {
+        using var ps = CreateShell();
+        ps.AddCommand("Get-SBSession")
+            .AddParameter("ServiceBusConnectionString", ConnectionString);
+
+        if (!string.IsNullOrWhiteSpace(queue))
+        {
+            ps.AddParameter("Queue", queue);
+        }
+        else
+        {
+            ps.AddParameter("Topic", topic ?? throw new ArgumentNullException(nameof(topic)));
+            ps.AddParameter("Subscription", subscription ?? throw new ArgumentNullException(nameof(subscription)));
+        }
+
+        if (activeOnly)
+        {
+            ps.AddParameter("ActiveOnly", true);
+        }
+
+        if (lastUpdatedSince.HasValue)
+        {
+            ps.AddParameter("LastUpdatedSince", lastUpdatedSince.Value);
+        }
+
+        var result = ps.Invoke<PSObject>().Select(x => (SBSessionInfo)x.BaseObject).ToArray();
+        EnsureNoErrors(ps);
+        return result;
+    }
+
     internal static void EnsureNoErrors(PowerShell ps)
     {
         if (!ps.HadErrors)
@@ -978,6 +1014,55 @@ public class PowerShellCmdletTests
         {
             var name = s.Properties["SubscriptionName"]?.Value?.ToString();
             return string.Equals(name, "test-sub", StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public void Lists_sessions_for_topic_subscription_by_last_updated_state_via_amqp_management()
+    {
+        _fixture.ClearSubscription("session-topic", "session-sub");
+
+        var sessionA = $"list-sess-a-{Guid.NewGuid():N}";
+        var sessionB = $"list-sess-b-{Guid.NewGuid():N}";
+        var since = DateTime.UtcNow.AddMinutes(-5);
+
+        using (var ps = _fixture.CreateShell())
+        {
+            ps.AddCommand("Set-SBSessionState")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("Topic", "session-topic")
+                .AddParameter("Subscription", "session-sub")
+                .AddParameter("SessionId", sessionA)
+                .AddParameter("State", new Hashtable { { "marker", "a" } });
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+            ps.Commands.Clear();
+
+            ps.AddCommand("Set-SBSessionState")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("Topic", "session-topic")
+                .AddParameter("Subscription", "session-sub")
+                .AddParameter("SessionId", sessionB)
+                .AddParameter("State", new Hashtable { { "marker", "b" } });
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+        }
+
+        Thread.Sleep(300);
+
+        var sessions = _fixture.GetSessions(
+            topic: "session-topic",
+            subscription: "session-sub",
+            lastUpdatedSince: since);
+        var ids = sessions.Select(s => s.SessionId).ToArray();
+
+        Assert.Contains(sessionA, ids);
+        Assert.Contains(sessionB, ids);
+        Assert.All(sessions, s =>
+        {
+            Assert.Equal("session-topic", s.Topic);
+            Assert.Equal("session-sub", s.Subscription);
+            Assert.Equal("session-topic/Subscriptions/session-sub", s.EntityPath);
         });
     }
 }
