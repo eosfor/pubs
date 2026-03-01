@@ -293,22 +293,37 @@ public class ServiceBusFixture : IAsyncLifetime
     public ServiceBusReceivedMessage[] ReceiveFromQueueSession(string queue, string sessionId, int maxMessages, int batchSize = 10)
     {
         using var ps = CreateShell();
+        object? ctx = null;
         ps.AddCommand("New-SBSessionContext")
             .AddParameter("Queue", queue)
             .AddParameter("SessionId", sessionId)
             .AddParameter("ServiceBusConnectionString", ConnectionString);
-        var ctx = ps.Invoke<PSObject>().Single().BaseObject;
+        ctx = ps.Invoke<PSObject>().Single().BaseObject;
         EnsureNoErrors(ps);
         ps.Commands.Clear();
 
-        ps.AddCommand("Receive-SBMessage")
-            .AddParameter("SessionContext", ctx)
-            .AddParameter("MaxMessages", maxMessages)
-            .AddParameter("BatchSize", batchSize);
+        try
+        {
+            ps.AddCommand("Receive-SBMessage")
+                .AddParameter("SessionContext", ctx)
+                .AddParameter("MaxMessages", maxMessages)
+                .AddParameter("BatchSize", batchSize);
 
-        var result = ps.Invoke<ServiceBusReceivedMessage>();
-        EnsureNoErrors(ps);
-        return result.ToArray();
+            var result = ps.Invoke<ServiceBusReceivedMessage>();
+            EnsureNoErrors(ps);
+            return result.ToArray();
+        }
+        finally
+        {
+            if (ctx is not null)
+            {
+                ps.Commands.Clear();
+                ps.AddCommand("Close-SBSessionContext")
+                    .AddParameter("Context", new[] { ctx });
+                ps.Invoke();
+                EnsureNoErrors(ps);
+            }
+        }
     }
 
     public void ClearQueue(string queue)
@@ -428,6 +443,60 @@ public class ServiceBusFixture : IAsyncLifetime
 
         var errors = ps.Streams.Error.Select(e => e.ToString()).ToArray();
         throw new Xunit.Sdk.XunitException(string.Join(Environment.NewLine, errors));
+    }
+
+    internal static void InvokeWithSessionLockRetry(PowerShell ps, int maxAttempts = 3, int delayMs = 250)
+    {
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            ps.Invoke();
+            if (!ps.HadErrors)
+            {
+                return;
+            }
+
+            if (attempt < maxAttempts && HasSessionCannotBeLockedError(ps))
+            {
+                ps.Streams.Error.Clear();
+                Thread.Sleep(delayMs);
+                continue;
+            }
+
+            EnsureNoErrors(ps);
+        }
+    }
+
+    internal static T[] InvokeWithSessionLockRetry<T>(PowerShell ps, int maxAttempts = 3, int delayMs = 250)
+    {
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var result = ps.Invoke<T>().ToArray();
+            if (!ps.HadErrors)
+            {
+                return result;
+            }
+
+            if (attempt < maxAttempts && HasSessionCannotBeLockedError(ps))
+            {
+                ps.Streams.Error.Clear();
+                Thread.Sleep(delayMs);
+                continue;
+            }
+
+            EnsureNoErrors(ps);
+        }
+
+        throw new Xunit.Sdk.XunitException("Session lock retry exceeded without details.");
+    }
+
+    private static bool HasSessionCannotBeLockedError(PowerShell ps)
+    {
+        return ps.Streams.Error.Any(error =>
+        {
+            var text = error.ToString();
+            return text.Contains("SessionCannotBeLocked", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("locked by another receiver", StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     private Task ClearQueuesAndSubscriptions()
@@ -735,8 +804,7 @@ public class PowerShellCmdletTests
             .AddParameter("Topic", "session-topic")
             .AddParameter("Subscription", "session-sub")
             .AddParameter("State", state);
-        ps.Invoke();
-        ServiceBusFixture.EnsureNoErrors(ps);
+        ServiceBusFixture.InvokeWithSessionLockRetry(ps);
         ps.Commands.Clear();
 
         ps.AddCommand("Get-SBSessionState")
@@ -752,6 +820,113 @@ public class PowerShellCmdletTests
         Assert.Equal(2, fetched.Deferred.Count);
         Assert.Contains(fetched.Deferred, d => d.Order == 5 && d.Seq == 11);
         Assert.Contains(fetched.Deferred, d => d.Order == 6 && d.Seq == 12);
+    }
+
+    [Fact]
+    public void Pipes_listed_sessions_into_GetSBSessionState()
+    {
+        _fixture.ClearSubscription("session-topic", "session-sub");
+
+        var sessionA = $"pipe-state-a-{Guid.NewGuid():N}";
+        var sessionB = $"pipe-state-b-{Guid.NewGuid():N}";
+        var expectedA = new SessionOrderingState { LastSeenOrderNum = 41, Deferred = new List<OrderSeq> { new(2, 2001) } };
+        var expectedB = new SessionOrderingState { LastSeenOrderNum = 42, Deferred = new List<OrderSeq> { new(3, 3001) } };
+
+        using var ps = _fixture.CreateShell();
+        ps.AddCommand("Set-SBSessionState")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("SessionId", sessionA)
+            .AddParameter("Topic", "session-topic")
+            .AddParameter("Subscription", "session-sub")
+            .AddParameter("State", expectedA);
+        ServiceBusFixture.InvokeWithSessionLockRetry(ps);
+        ps.Commands.Clear();
+
+        ps.AddCommand("Set-SBSessionState")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("SessionId", sessionB)
+            .AddParameter("Topic", "session-topic")
+            .AddParameter("Subscription", "session-sub")
+            .AddParameter("State", expectedB);
+        ServiceBusFixture.InvokeWithSessionLockRetry(ps);
+        ps.Commands.Clear();
+
+        ps.AddCommand("Get-SBSession")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("Topic", "session-topic")
+            .AddParameter("Subscription", "session-sub");
+
+        ps.AddCommand("Where-Object")
+            .AddParameter("FilterScript", ScriptBlock.Create($"$_.SessionId -in @('{sessionA}', '{sessionB}')"));
+
+        ps.AddCommand("Get-SBSessionState")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString);
+
+        var fetched = ps.Invoke<PSObject>()
+            .Select(x => x.BaseObject as SessionOrderingState)
+            .Where(x => x is not null)
+            .Cast<SessionOrderingState>()
+            .ToArray();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Equal(2, fetched.Length);
+        Assert.Contains(fetched, s => s.LastSeenOrderNum == expectedA.LastSeenOrderNum && s.Deferred.Count == expectedA.Deferred.Count);
+        Assert.Contains(fetched, s => s.LastSeenOrderNum == expectedB.LastSeenOrderNum && s.Deferred.Count == expectedB.Deferred.Count);
+    }
+
+    [Fact]
+    public void Pipes_context_sessions_into_GetSBSessionState_with_SessionContext()
+    {
+        _fixture.ClearSubscription("session-topic", "session-sub");
+
+        var sessionId = $"ctx-pipe-{Guid.NewGuid():N}";
+        var seed = _fixture.NewMessages(sessionId, new[] { "context-seed" });
+        _fixture.SendToTopic("session-topic", seed, perSessionThreadAuto: true);
+
+        var expected = new SessionOrderingState
+        {
+            LastSeenOrderNum = 55,
+            Deferred = new List<OrderSeq> { new(9, 9001), new(10, 10001) }
+        };
+
+        using var ps = _fixture.CreateShell();
+        ps.AddCommand("New-SBSessionContext")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("Topic", "session-topic")
+            .AddParameter("Subscription", "session-sub")
+            .AddParameter("SessionId", sessionId);
+        var context = ps.Invoke<PSObject>().Single().BaseObject;
+        ServiceBusFixture.EnsureNoErrors(ps);
+        ps.Commands.Clear();
+
+        try
+        {
+            ps.AddCommand("Set-SBSessionState")
+                .AddParameter("SessionContext", context)
+                .AddParameter("State", expected);
+            ServiceBusFixture.InvokeWithSessionLockRetry(ps);
+            ps.Commands.Clear();
+
+            ps.AddCommand("Get-SBSession")
+                .AddParameter("SessionContext", context);
+
+            ps.AddCommand("Get-SBSessionState")
+                .AddParameter("SessionContext", context);
+
+            var fetched = ServiceBusFixture.InvokeWithSessionLockRetry<PSObject>(ps).Single().BaseObject as SessionOrderingState;
+
+            Assert.NotNull(fetched);
+            Assert.Equal(expected.LastSeenOrderNum, fetched!.LastSeenOrderNum);
+            Assert.Equal(expected.Deferred.Count, fetched.Deferred.Count);
+        }
+        finally
+        {
+            ps.Commands.Clear();
+            ps.AddCommand("Close-SBSessionContext")
+                .AddParameter("Context", new[] { context });
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+        }
     }
 
     [Fact]
@@ -1034,8 +1209,7 @@ public class PowerShellCmdletTests
                 .AddParameter("Subscription", "session-sub")
                 .AddParameter("SessionId", sessionA)
                 .AddParameter("State", new Hashtable { { "marker", "a" } });
-            ps.Invoke();
-            ServiceBusFixture.EnsureNoErrors(ps);
+            ServiceBusFixture.InvokeWithSessionLockRetry(ps);
             ps.Commands.Clear();
 
             ps.AddCommand("Set-SBSessionState")
@@ -1044,8 +1218,7 @@ public class PowerShellCmdletTests
                 .AddParameter("Subscription", "session-sub")
                 .AddParameter("SessionId", sessionB)
                 .AddParameter("State", new Hashtable { { "marker", "b" } });
-            ps.Invoke();
-            ServiceBusFixture.EnsureNoErrors(ps);
+            ServiceBusFixture.InvokeWithSessionLockRetry(ps);
         }
 
         Thread.Sleep(300);
