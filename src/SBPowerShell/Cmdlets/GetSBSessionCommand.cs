@@ -12,8 +12,11 @@ public sealed class GetSBSessionCommand : PSCmdlet
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
+    private const string ParameterSetContext = "Context";
 
-    [Parameter(Mandatory = true)]
+    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string ServiceBusConnectionString { get; set; } = string.Empty;
 
@@ -29,13 +32,19 @@ public sealed class GetSBSessionCommand : PSCmdlet
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
-    [Parameter]
+    [Parameter(ParameterSetName = ParameterSetContext, Mandatory = true, ValueFromPipeline = true)]
+    public SessionContext? SessionContext { get; set; }
+
+    [Parameter(ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     public SwitchParameter ActiveOnly { get; set; }
 
-    [Parameter]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     public DateTime? LastUpdatedSince { get; set; }
 
-    [Parameter]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     [ValidateRange(1, 600)]
     public int OperationTimeoutSec { get; set; } = 60;
 
@@ -43,6 +52,17 @@ public sealed class GetSBSessionCommand : PSCmdlet
     {
         try
         {
+            if (ParameterSetName == ParameterSetContext)
+            {
+                if (SessionContext is null)
+                {
+                    throw new ArgumentException("SessionContext is required for the Context parameter set.");
+                }
+
+                WriteObject(BuildSessionInfoFromContext(SessionContext));
+                return;
+            }
+
             if (ActiveOnly && LastUpdatedSince.HasValue)
             {
                 throw new ArgumentException("Parameters ActiveOnly and LastUpdatedSince cannot be used together.");
@@ -89,8 +109,53 @@ public sealed class GetSBSessionCommand : PSCmdlet
 
     private object ResolveErrorTarget()
     {
+        if (ParameterSetName == ParameterSetContext)
+        {
+            return (object?)SessionContext?.EntityPath ?? this;
+        }
+
         return ParameterSetName == ParameterSetQueue
             ? Queue
             : $"{Topic}/{Subscription}";
+    }
+
+    private static SBSessionInfo BuildSessionInfoFromContext(SessionContext context)
+    {
+        var entityPath = context.EntityPath.Trim('/');
+        if (TryParseTopicSubscription(entityPath, out var topic, out var subscription))
+        {
+            return new SBSessionInfo
+            {
+                SessionId = context.SessionId,
+                EntityPath = entityPath,
+                Topic = topic,
+                Subscription = subscription
+            };
+        }
+
+        return new SBSessionInfo
+        {
+            SessionId = context.SessionId,
+            EntityPath = entityPath,
+            Queue = entityPath
+        };
+    }
+
+    private static bool TryParseTopicSubscription(string entityPath, out string topic, out string subscription)
+    {
+        const string subscriptionSegment = "/subscriptions/";
+        topic = string.Empty;
+        subscription = string.Empty;
+
+        var normalized = entityPath.Trim('/');
+        var markerIndex = normalized.IndexOf(subscriptionSegment, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex <= 0)
+        {
+            return false;
+        }
+
+        topic = normalized[..markerIndex].Trim('/');
+        subscription = normalized[(markerIndex + subscriptionSegment.Length)..].Trim('/');
+        return !string.IsNullOrWhiteSpace(topic) && !string.IsNullOrWhiteSpace(subscription);
     }
 }
