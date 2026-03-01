@@ -17,6 +17,7 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 - `Clear-SBQueue`, `Clear-SBSubscription` — очистка очереди или подписки пакетами.
 - `Get-SBTopic` — список топиков с метаданными из SDK (`TopicProperties`) и runtime-информацией.
 - `Get-SBSubscription` — список подписок указанного топика с метаданными (`SubscriptionProperties`) и runtime-данными, включая количество сообщений.
+- `Get-SBSession` — перечисление session id для queue или topic/subscription через low-level AMQP management operation.
 
 ## Требования
 - .NET 8/9 SDK для сборки.
@@ -103,6 +104,48 @@ Receive-SBMessage -Queue "session-queue" -ServiceBusConnectionString $conn -MaxM
 # Receive-SBMessage -Topic "session-topic" -Subscription "session-sub" -ServiceBusConnectionString $conn -MaxMessages 6
 ```
 
+Просмотр сессий (`Get-SBSession`) и ручная проверка на реальном Azure Service Bus:
+```pwsh
+# 1) Подключение к реальному namespace (SAS policy с правами как минимум Listen на сущность;
+#    для создания/очистки сущностей и записи session state удобно использовать Manage)
+$conn = "Endpoint=sb://<your-namespace>.servicebus.windows.net/;SharedAccessKeyName=<policy>;SharedAccessKey=<key>"
+
+# 2) Убедитесь, что подписка требует сессии (RequiresSession=true), например:
+#    Topic: SESSION
+#    Subscription: SESS_SUB
+
+# 3) Отправьте тестовые сообщения в несколько сессий
+$m1 = New-SBMessage -SessionId "manual-sess-1" -Body "one","two"
+$m2 = New-SBMessage -SessionId "manual-sess-2" -Body "three","four"
+Send-SBMessage -Topic "SESSION" -Message ($m1 + $m2) -ServiceBusConnectionString $conn -PerSessionThreadAuto
+
+# 4) Получить сессии топика/подписки (cmdlet из задачи)
+Get-SBSession -ServiceBusConnectionString $conn -Topic "SESSION" -Subscription "SESS_SUB"
+
+# 5) Legacy-совместимый режим (Track1 GetMessageSessions())
+Get-SBSession -ServiceBusConnectionString $conn -Topic "SESSION" -Subscription "SESS_SUB" -ActiveOnly
+
+# 6) По session state (если вы обновляете state):
+#    сначала обновим state для конкретной сессии, потом отфильтруем по времени
+Set-SBSessionState -ServiceBusConnectionString $conn -Topic "SESSION" -Subscription "SESS_SUB" -SessionId "manual-sess-1" -State @{ Probe = 1 }
+Get-SBSession -ServiceBusConnectionString $conn -Topic "SESSION" -Subscription "SESS_SUB" -LastUpdatedSince (Get-Date).AddHours(-1)
+
+# 7) Проверка результата: взять один SessionId из выдачи и прочитать сообщения именно из этой сессии
+$ctx = New-SBSessionContext -Topic "SESSION" -Subscription "SESS_SUB" -SessionId "manual-sess-1" -ServiceBusConnectionString $conn
+Receive-SBMessage -SessionContext $ctx -MaxMessages 10
+Close-SBSessionContext -Context $ctx
+```
+
+Замечания:
+- `Get-SBSession` использует low-level AMQP management operation `com.microsoft:get-message-sessions`.
+- `-LastUpdatedSince` ориентирован на обновления session state.
+- `-ActiveOnly` оставлен для совместимости с legacy Track1 API (`GetMessageSessions()`), но на wire уровне мапится на тот же sentinel (`DateTime.MaxValue`), что и вызов по умолчанию.
+- Режим без `-ActiveOnly`/`-LastUpdatedSince` пытается запросить "все" сессии через sentinel `DateTime.MaxValue`; поведение зависит от сервиса/эмулятора.
+
+Подробное описание реализации (`CBS`, AMQP management, wire-поля, отличия Azure/Emulator):
+- [`sessions.md`](sessions.md) — русский
+- [`sessions.en.md`](sessions.en.md) — English
+
 Создание сообщений в цикле с явным приведением типов:
 ```pwsh
 # При использовании 1..10 в CustomProperties важно явно указывать тип [int],
@@ -162,6 +205,99 @@ Set-SBSessionState -SessionContext $ctx -State @{ Progress = 42 }
 
 Close-SBSessionContext -Context $ctx
 ```
+
+Восстановление deferred -> active в рамках одной сессии:
+```pwsh
+param(
+    [Parameter(Mandatory)] [string]$ConnStr,
+    [Parameter(Mandatory)] [string]$SessionId,
+    [string]$Topic = "NO_SESSION",
+    [string]$Subscription = "STATE_SUB",
+    [string]$SnapDir = "./out",
+    [int]$ChunkSize = 200,
+    [int]$BatchSize = 100
+)
+
+$ErrorActionPreference = "Stop"
+New-Item -ItemType Directory -Path $SnapDir -Force | Out-Null
+$snapFile = Join-Path $SnapDir "state.$SessionId.before.json"
+
+$ctx = New-SBSessionContext -Topic $Topic -Subscription $Subscription -SessionId $SessionId -ServiceBusConnectionString $ConnStr
+try {
+    # 1) backup state
+    $stateJson = Get-SBSessionState -SessionContext $ctx -AsString
+    $stateJson | Set-Content $snapFile -Encoding UTF8
+    $state = $stateJson | ConvertFrom-Json
+
+    # 2) collect deferred sequence numbers
+    $seqs = @(
+        $state.Deferred | ForEach-Object {
+            if ($_.PSObject.Properties.Name -contains "SeqNumber") { [int64]$_.SeqNumber }
+            elseif ($_.PSObject.Properties.Name -contains "seq")   { [int64]$_.seq }
+            elseif ($_.PSObject.Properties.Name -contains "Seq")   { [int64]$_.Seq }
+        }
+    ) | Where-Object { $_ -ne $null }
+
+    if ($seqs.Count -gt 0) {
+        # 3) deferred -> send active copy -> complete old deferred
+        Receive-SBDeferredMessage -SessionContext $ctx -SequenceNumber $seqs -ChunkSize $ChunkSize |
+            Send-SBMessage -SessionContext $ctx -BatchSize $BatchSize -PassThru |
+            Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+    }
+
+    # 4) clear deferred in state (supports both LastSeenOrder and LastSeenOrderNum)
+    $lastSeen = if ($state.PSObject.Properties.Name -contains "LastSeenOrder") {
+        [int]$state.LastSeenOrder
+    } else {
+        [int]$state.LastSeenOrderNum
+    }
+
+    if ($state.PSObject.Properties.Name -contains "LastSeenOrder") {
+        $newState = @{ LastSeenOrder = $lastSeen; Deferred = @() }
+    } else {
+        $newState = @{ LastSeenOrderNum = $lastSeen; Deferred = @() }
+    }
+
+    Set-SBSessionState -SessionContext $ctx -State ($newState | ConvertTo-Json -Compress)
+}
+finally {
+    Close-SBSessionContext -Context $ctx
+}
+```
+
+Stress-проверка полного цикла (producer + consumer + recovery):
+```pwsh
+# Окно 1: producer (отправить 10k, оставить "дыру" по order=2)
+$cs = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+$sid = "stress-session-1"
+pwsh ./scripts/stress/send-state-sub-load.ps1 -ConnStr $cs -SessionId $sid -TotalMessages 10000
+
+# Окно 2: consumer (падение при росте Deferred, чтобы имитировать сбой)
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid -CrashDeferredThreshold 3000
+
+# Когда producer закончил, отправляем missing order=2:
+$m2 = New-SBMessage -Body (@{ sessionId = $sid; order = 2 } | ConvertTo-Json -Compress) -SessionId $sid -CustomProperties @{ order = 2; sessionId = $sid }
+Send-SBMessage -ServiceBusConnectionString $cs -Topic "NO_SESSION" -Message $m2
+
+# Recovery deferred -> active:
+pwsh ./scripts/stress/recover-state-sub-deferred.ps1 -ConnStr $cs -SessionId $sid -Topic "NO_SESSION" -Subscription "STATE_SUB"
+
+# Запускаем consumer снова, чтобы дренировать восстановленные active:
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid
+
+# Диагностика:
+pwsh ./scripts/stress/inspect-state-sub.ps1 -ConnStr $cs -SessionId $sid
+```
+
+Примечание:
+- Для этого сценария в `emulator/config.json` добавлена сессионная подписка `NO_SESSION/STATE_SUB`.
+- Если сессия уже в hard-fail (невозможно открыть `AcceptSession`), recovery через `SessionContext` не сработает: сначала нужен внешний runbook/репаблиш в новую сессию.
+
+Документы по инциденту переполнения session state:
+- `scripts/stress/SESSION_STATE_OVERFLOW_RECOVERY_RUNBOOK.ru.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RECOVERY_RUNBOOK.en.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RUN_REPORT.ru.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RUN_REPORT.en.md`
 
 ## Потоковая сортировка несессионного топика (`reorderAndForward2.ps1`)
 ### Что делает

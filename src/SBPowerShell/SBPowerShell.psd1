@@ -39,6 +39,7 @@
         'Receive-SBDLQMessage',
         'Receive-SBDeferredMessage',
         'Set-SBMessage',
+        'Get-SBSession',
         'Get-SBSessionState',
         'Set-SBSessionState',
         'New-SBSessionState',

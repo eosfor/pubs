@@ -15,6 +15,7 @@ PowerShell module for Azure Service Bus and local Service Bus Emulator workflows
 - `Clear-SBQueue`, `Clear-SBSubscription` - clear queue or subscription in batches.
 - `Get-SBTopic` - list topics with SDK metadata (`TopicProperties`) and runtime data.
 - `Get-SBSubscription` - list subscriptions for a topic with metadata (`SubscriptionProperties`) and runtime data, including message counts.
+- `Get-SBSession` - enumerate session ids for a queue or topic/subscription via a low-level AMQP management operation.
 
 ## Requirements
 - .NET 8/9 SDK for build.
@@ -101,6 +102,10 @@ Receive-SBMessage -Queue "session-queue" -ServiceBusConnectionString $conn -MaxM
 # Receive-SBMessage -Topic "session-topic" -Subscription "session-sub" -ServiceBusConnectionString $conn -MaxMessages 6
 ```
 
+`Get-SBSession` usage and manual verification are documented in detail in:
+- [`sessions.en.md`](sessions.en.md) (English)
+- [`sessions.md`](sessions.md) (Russian)
+
 Message creation in loops with explicit type casting:
 ```pwsh
 # When using 1..10 in CustomProperties, cast to [int] explicitly,
@@ -160,6 +165,99 @@ Set-SBSessionState -SessionContext $ctx -State @{ Progress = 42 }
 
 Close-SBSessionContext -Context $ctx
 ```
+
+Deferred -> active recovery within one session:
+```pwsh
+param(
+    [Parameter(Mandatory)] [string]$ConnStr,
+    [Parameter(Mandatory)] [string]$SessionId,
+    [string]$Topic = "NO_SESSION",
+    [string]$Subscription = "STATE_SUB",
+    [string]$SnapDir = "./out",
+    [int]$ChunkSize = 200,
+    [int]$BatchSize = 100
+)
+
+$ErrorActionPreference = "Stop"
+New-Item -ItemType Directory -Path $SnapDir -Force | Out-Null
+$snapFile = Join-Path $SnapDir "state.$SessionId.before.json"
+
+$ctx = New-SBSessionContext -Topic $Topic -Subscription $Subscription -SessionId $SessionId -ServiceBusConnectionString $ConnStr
+try {
+    # 1) backup state
+    $stateJson = Get-SBSessionState -SessionContext $ctx -AsString
+    $stateJson | Set-Content $snapFile -Encoding UTF8
+    $state = $stateJson | ConvertFrom-Json
+
+    # 2) collect deferred sequence numbers
+    $seqs = @(
+        $state.Deferred | ForEach-Object {
+            if ($_.PSObject.Properties.Name -contains "SeqNumber") { [int64]$_.SeqNumber }
+            elseif ($_.PSObject.Properties.Name -contains "seq")   { [int64]$_.seq }
+            elseif ($_.PSObject.Properties.Name -contains "Seq")   { [int64]$_.Seq }
+        }
+    ) | Where-Object { $_ -ne $null }
+
+    if ($seqs.Count -gt 0) {
+        # 3) deferred -> send active copy -> complete old deferred
+        Receive-SBDeferredMessage -SessionContext $ctx -SequenceNumber $seqs -ChunkSize $ChunkSize |
+            Send-SBMessage -SessionContext $ctx -BatchSize $BatchSize -PassThru |
+            Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+    }
+
+    # 4) clear deferred in state (supports both LastSeenOrder and LastSeenOrderNum)
+    $lastSeen = if ($state.PSObject.Properties.Name -contains "LastSeenOrder") {
+        [int]$state.LastSeenOrder
+    } else {
+        [int]$state.LastSeenOrderNum
+    }
+
+    if ($state.PSObject.Properties.Name -contains "LastSeenOrder") {
+        $newState = @{ LastSeenOrder = $lastSeen; Deferred = @() }
+    } else {
+        $newState = @{ LastSeenOrderNum = $lastSeen; Deferred = @() }
+    }
+
+    Set-SBSessionState -SessionContext $ctx -State ($newState | ConvertTo-Json -Compress)
+}
+finally {
+    Close-SBSessionContext -Context $ctx
+}
+```
+
+Stress test for full cycle (producer + consumer + recovery):
+```pwsh
+# Window 1: producer (send 10k, keep a gap at order=2)
+$cs = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+$sid = "stress-session-1"
+pwsh ./scripts/stress/send-state-sub-load.ps1 -ConnStr $cs -SessionId $sid -TotalMessages 10000
+
+# Window 2: consumer (crash when Deferred grows to simulate failure)
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid -CrashDeferredThreshold 3000
+
+# After producer is done, send missing order=2:
+$m2 = New-SBMessage -Body (@{ sessionId = $sid; order = 2 } | ConvertTo-Json -Compress) -SessionId $sid -CustomProperties @{ order = 2; sessionId = $sid }
+Send-SBMessage -ServiceBusConnectionString $cs -Topic "NO_SESSION" -Message $m2
+
+# Recovery deferred -> active:
+pwsh ./scripts/stress/recover-state-sub-deferred.ps1 -ConnStr $cs -SessionId $sid -Topic "NO_SESSION" -Subscription "STATE_SUB"
+
+# Run consumer again to drain recovered active messages:
+pwsh ./scripts/stress/run-state-sub-consumer.ps1 -ConnStr $cs -SessionId $sid
+
+# Diagnostics:
+pwsh ./scripts/stress/inspect-state-sub.ps1 -ConnStr $cs -SessionId $sid
+```
+
+Notes:
+- This scenario uses `NO_SESSION/STATE_SUB` (session-enabled), added to `emulator/config.json`.
+- If the session is already in hard-fail (`AcceptSession` cannot open), `SessionContext` recovery will not work; use an external runbook / republish into a new session first.
+
+Session-state overflow incident documents:
+- `scripts/stress/SESSION_STATE_OVERFLOW_RECOVERY_RUNBOOK.ru.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RECOVERY_RUNBOOK.en.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RUN_REPORT.ru.md`
+- `scripts/stress/SESSION_STATE_OVERFLOW_RUN_REPORT.en.md`
 
 ## Streaming Reorder for a Non-Session Topic (`reorderAndForward2.ps1`)
 ### What It Does

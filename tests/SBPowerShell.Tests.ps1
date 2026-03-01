@@ -386,6 +386,78 @@ Describe "SBPowerShell cmdlets against emulator" {
         $fetched | Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Complete | Out-Null
     }
 
+    It "fetches deferred messages in chunks" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        $messages = New-SBMessage -Body 'd1', 'd2', 'd3', 'd4', 'd5'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $deferredSeq = @(
+            Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 5 -NoComplete |
+            Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Defer |
+            ForEach-Object { $_.SequenceNumber }
+        )
+
+        $fetched = @(Receive-SBDeferredMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -SequenceNumber $deferredSeq -ChunkSize 2)
+        $fetched.Count | Should -Be 5
+        ($fetched | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('d1', 'd2', 'd3', 'd4', 'd5')
+
+        $fetched | Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Complete | Out-Null
+    }
+
+    It "replays deferred messages to active via session context pipeline" {
+        Clear-SBQueue -Queue 'session-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        $sid = "replay-$([Guid]::NewGuid().ToString('N'))"
+        $messages = New-SBMessage -SessionId $sid -Body 'x1', 'x2'
+        Send-SBMessage -Queue 'session-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $ctx = New-SBSessionContext -Queue 'session-queue' -SessionId $sid -ServiceBusConnectionString $script:connectionString
+        try {
+            $toDefer = @(Receive-SBMessage -SessionContext $ctx -MaxMessages 2 -NoComplete)
+            $seq = @($toDefer | Set-SBMessage -SessionContext $ctx -Defer | ForEach-Object { $_.SequenceNumber })
+
+            $passThru = @(
+                Receive-SBDeferredMessage -SessionContext $ctx -SequenceNumber $seq -ChunkSize 1 |
+                Send-SBMessage -SessionContext $ctx -PassThru -BatchSize 1
+            )
+            $passThru.Count | Should -Be 2
+            $passThru | Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+
+            $active = @(Receive-SBMessage -SessionContext $ctx -MaxMessages 2 -NoComplete)
+            $active.Count | Should -Be 2
+            ($active | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('x1', 'x2')
+            $active | Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+
+        }
+        finally {
+            Close-SBSessionContext -Context $ctx
+        }
+    }
+
+    It "sends to parent topic when SessionContext points to a subscription" {
+        Clear-SBSubscription -Topic 'session-topic' -Subscription 'session-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+        $sid = "ctx-sub-$([Guid]::NewGuid().ToString('N'))"
+        $seed = New-SBMessage -SessionId $sid -Body 'seed'
+        Send-SBMessage -Topic 'session-topic' -Message $seed -ServiceBusConnectionString $script:connectionString
+
+        $ctx = New-SBSessionContext -Topic 'session-topic' -Subscription 'session-sub' -SessionId $sid -ServiceBusConnectionString $script:connectionString
+        try {
+            $seedMsg = @(Receive-SBMessage -SessionContext $ctx -MaxMessages 1 -NoComplete)
+            $seedMsg.Count | Should -Be 1
+            $seedMsg | Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+
+            $msg = New-SBMessage -SessionId $sid -Body 'from-context-sub'
+            Send-SBMessage -SessionContext $ctx -Message $msg -BatchSize 1
+
+            $received = @(Receive-SBMessage -SessionContext $ctx -MaxMessages 1 -NoComplete)
+            $received.Count | Should -Be 1
+            $received[0].Body.ToString() | Should -Be 'from-context-sub'
+            $received | Set-SBMessage -SessionContext $ctx -Complete | Out-Null
+        }
+        finally {
+            Close-SBSessionContext -Context $ctx
+        }
+    }
+
     It "orders messages using session context and defer" {
         Clear-SBQueue -Queue 'session-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
         Clear-SBSubscription -Topic 'session-topic' -Subscription 'session-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
@@ -562,6 +634,27 @@ Describe "SBPowerShell cmdlets against emulator" {
         $received = @(Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1)
         $received.Count | Should -Be 1
         $received[0].Body.ToString() | Should -Be 'pipe-one'
+    }
+
+    It "returns passthru only when requested" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        $messages = New-SBMessage -Body 'pt-msg'
+
+        $noOutput = @(Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString)
+        $noOutput.Count | Should -Be 0
+
+        $passed = @(
+            Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete |
+            Send-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -PassThru
+        )
+        $passed.Count | Should -Be 1
+        $passed[0].Body.ToString() | Should -Be 'pt-msg'
+        $passed | Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Complete | Out-Null
+
+        $resent = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete)
+        $resent.Count | Should -Be 1
+        $resent[0].Body.ToString() | Should -Be 'pt-msg'
+        $resent | Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -Complete | Out-Null
     }
 
     It "peeks messages without removing them" {

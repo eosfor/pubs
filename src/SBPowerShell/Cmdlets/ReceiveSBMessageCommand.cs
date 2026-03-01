@@ -4,6 +4,7 @@ using System.Management.Automation;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using SBPowerShell.Internal;
 using SBPowerShell.Models;
 
 namespace SBPowerShell.Cmdlets;
@@ -188,6 +189,7 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
     private void ReceiveFromReceiver(ServiceBusReceiver receiver, bool peek, bool noComplete, ReceivePlan plan, CancellationToken cancellationToken, bool disposeReceiver = true, bool isSessionReceiver = false)
     {
+        using var renewer = SessionLockAutoRenewer.Start(receiver, cancellationToken);
         try
         {
             while (!cancellationToken.IsCancellationRequested)

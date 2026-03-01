@@ -1,0 +1,12 @@
+Deferred sequence count: 8098
+Receive-SBDeferredMessage: /Users/andrei/repo/pubs/out/stress-runs/20260211-224041-renew-check/recover-v2.ps1:34
+Line |
+  34 |  … eferred = @(Receive-SBDeferredMessage -SessionContext $ctx -SequenceN …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Failed to lock one or more specified messages. Either the message is
+     | already locked or does not exist.
+     | TrackingId:7f3310f1-8eb5-4b9f-a1be-9aedc34e4b4e_G0,
+     | SystemTracker:sbemulatorns:topic:no_session|state_sub,
+     | Timestamp:2026-02-12T07:45:16 (MessageNotFound). For troubleshooting
+     | information, see
+     | https://aka.ms/azsdk/net/servicebus/exceptions/troubleshoot.
