@@ -3,7 +3,7 @@
     RootModule = 'SBPowerShell.dll'
 
     # Version number of this module.
-    ModuleVersion = '0.1.0'
+    ModuleVersion = '0.1.1'
 
     # ID used to uniquely identify this module.
     GUID = 'c6d9d8f5-6c32-4e3a-8d8d-1d2076df0c3e'
@@ -39,6 +39,7 @@
         'Receive-SBDLQMessage',
         'Receive-SBDeferredMessage',
         'Set-SBMessage',
+        'Get-SBSession',
         'Get-SBSessionState',
         'Set-SBSessionState',
         'New-SBSessionState',
@@ -48,7 +49,34 @@
         'Clear-SBSubscription',
         'Get-SBTopic',
         'Get-SBSubscription',
-        'Get-SBSession'
+        'Get-SBQueue',
+        'New-SBQueue',
+        'Set-SBQueue',
+        'Remove-SBQueue',
+        'New-SBTopic',
+        'Set-SBTopic',
+        'Remove-SBTopic',
+        'New-SBSubscription',
+        'Set-SBSubscription',
+        'Remove-SBSubscription',
+        'Get-SBRule',
+        'New-SBRule',
+        'Set-SBRule',
+        'Remove-SBRule',
+        'Send-SBScheduledMessage',
+        'Remove-SBScheduledMessage',
+        'Clear-SBDLQ',
+        'Replay-SBDLQMessage',
+        'Receive-SBTransferDLQMessage',
+        'Get-SBAuthorizationRule',
+        'New-SBAuthorizationRule',
+        'Set-SBAuthorizationRule',
+        'Remove-SBAuthorizationRule',
+        'Rotate-SBKey',
+        'Get-SBConnectionString',
+        'Set-SBEntityStatus',
+        'Export-SBTopology',
+        'Import-SBTopology'
     )
 
     # Variables to export from this module

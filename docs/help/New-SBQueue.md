@@ -1,0 +1,355 @@
+---
+external help file: SBPowerShell.dll-Help.xml
+Module Name: SBPowerShell
+online version:
+schema: 2.0.0
+---
+
+# New-SBQueue
+
+## SYNOPSIS
+Creates Service Bus SBQueue operations.
+
+## SYNTAX
+
+```
+New-SBQueue -ServiceBusConnectionString <String> [-Queue] <String> [-RequiresSession <Boolean>]
+ [-RequiresDuplicateDetection <Boolean>] [-EnablePartitioning <Boolean>] [-EnableBatchedOperations <Boolean>]
+ [-DeadLetteringOnMessageExpiration <Boolean>] [-MaxSizeInMegabytes <Int32>]
+ [-MaxMessageSizeInKilobytes <Int32>] [-MaxDeliveryCount <Int32>] [-LockDuration <TimeSpan>]
+ [-DefaultMessageTimeToLive <TimeSpan>] [-AutoDeleteOnIdle <TimeSpan>]
+ [-DuplicateDetectionHistoryTimeWindow <TimeSpan>] [-ForwardTo <String>]
+ [-ForwardDeadLetteredMessagesTo <String>] [-UserMetadata <String>] [-ProgressAction <ActionPreference>]
+ [-WhatIf] [-Confirm] [<CommonParameters>]
+```
+
+## DESCRIPTION
+Use this cmdlet to perform Service Bus management or data-plane tasks for New-SBQueue.
+The command supports parameter sets: '__AllParameterSets'.
+Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+
+## EXAMPLES
+
+### Example 1 (__AllParameterSets)
+```powershell
+PS C:\\> New-SBQueue -ServiceBusConnectionString '<connection-string>' -Queue '<queue-name>'
+```
+
+Runs New-SBQueue using the '__AllParameterSets' parameter set.
+
+
+## PARAMETERS
+
+### -AutoDeleteOnIdle
+Automatically deletes the entity after being idle for this duration.
+
+```yaml
+Type: TimeSpan
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -DeadLetteringOnMessageExpiration
+Enables dead-lettering when messages expire.
+
+```yaml
+Type: Boolean
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -DefaultMessageTimeToLive
+Default time-to-live for messages in the entity.
+
+```yaml
+Type: TimeSpan
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -DuplicateDetectionHistoryTimeWindow
+Time window used for duplicate detection history.
+
+```yaml
+Type: TimeSpan
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -EnableBatchedOperations
+Enables server-side batched operations for the entity.
+
+```yaml
+Type: Boolean
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -EnablePartitioning
+Enables partitioning for the entity where supported.
+
+```yaml
+Type: Boolean
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -ForwardDeadLetteredMessagesTo
+Entity path to forward dead-lettered messages to.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -ForwardTo
+Entity path to forward active messages to.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -LockDuration
+Lock duration used for message processing.
+
+```yaml
+Type: TimeSpan
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -MaxDeliveryCount
+Maximum delivery attempts before dead-lettering.
+
+```yaml
+Type: Int32
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -MaxMessageSizeInKilobytes
+Maximum message size allowed for the entity in kilobytes.
+
+```yaml
+Type: Int32
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -MaxSizeInMegabytes
+Maximum entity size in megabytes.
+
+```yaml
+Type: Int32
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Queue
+Queue name to target.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases: Name, QueueName
+
+Required: True
+Position: 0
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -RequiresDuplicateDetection
+Enables duplicate detection.
+
+```yaml
+Type: Boolean
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -RequiresSession
+Enables or requires session-aware processing.
+
+```yaml
+Type: Boolean
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -ServiceBusConnectionString
+Connection string for the target Service Bus namespace or emulator.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -UserMetadata
+User-defined metadata string stored on the entity.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -WhatIf
+Shows what would happen if the cmdlet runs.
+The cmdlet is not run.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: wi
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -ProgressAction
+Controls how progress records are handled.
+
+```yaml
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### CommonParameters
+This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
+
+## INPUTS
+
+### None
+## OUTPUTS
+
+### Azure.Messaging.ServiceBus.Administration.QueueProperties
+## NOTES
+
+## RELATED LINKS

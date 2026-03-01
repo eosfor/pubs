@@ -352,9 +352,35 @@ docker compose -f docker-compose.sbus.yml up -d     # запустить
 docker compose -f docker-compose.sbus.yml ps        # проверить статус
 ```
 
+## Документация команд (platyPS)
+- Markdown help для всех cmdlet лежит в `docs/help` и совместим с [platyPS](https://github.com/PowerShell/platyPS).
+- Автогенерация/обновление help из встроенного help:
+  ```pwsh
+  pwsh -NoLogo -NoProfile -File scripts/help/Generate-PlatyPsHelp.ps1
+  ```
+- Скрипт также:
+  - генерирует внешний help XML (`SBPowerShell.dll-Help.xml`) в `src/SBPowerShell/bin/Debug/net8.0/en-US`;
+  - валидирует, что `Get-Help -Full` возвращает synopsis/description/examples для всех экспортируемых команд.
+
 ## Тесты
 - Pester: `pwsh -NoLogo -File tests/SBPowerShell.Tests.ps1` (использует эмулятор).
 - C# xUnit интеграционные: `dotnet test tests/SBPowerShell.IntegrationTests/SBPowerShell.IntegrationTests.csproj` (тоже требует работающего эмулятора и .env).
+- Интеграционные тесты организованы покомандно: отдельный файл на команду/группу команд (`tests/SBPowerShell.IntegrationTests/SB*Cmdlet*Tests.cs`), общая инфраструктура — `SBCommandTestBase`.
+
+## Release Pipeline
+- Workflow: `.github/workflows/release-module.yml`
+- Что делает pipeline:
+  - собирает модуль (`Release/net8.0`);
+  - генерирует markdown help и внешний help XML (`docs/help` + `en-US/SBPowerShell.dll-Help.xml`);
+  - упаковывает модуль в zip (`out/SBPowerShell.<version>.zip`);
+  - публикует zip в GitHub Releases;
+  - публикует модуль в PowerShell Gallery.
+- Триггеры:
+  - push в `main` (автопубликация версии из `SBPowerShell.psd1`);
+  - push тега `v*` (например, `v0.1.1`);
+  - ручной запуск (`workflow_dispatch`).
+- Нужные secrets:
+  - `PSGALLERY_API_KEY` — API ключ PowerShell Gallery.
 
 ## Ручные проверки
 - `scripts/manual/send-100.ps1` — отправляет 100 сообщений `msg1..msg100` в топик `test-topic`.
@@ -371,10 +397,10 @@ pwsh scripts/manual/receive-100.ps1
 ```pwsh
 ./scripts/pack-module.ps1            # Release, net8.0, версия из psd1
 ./scripts/pack-module.ps1 -Configuration Debug
-./scripts/pack-module.ps1 -Version 0.1.0 -Framework net8.0
+./scripts/pack-module.ps1 -Version 0.1.1 -Framework net8.0
 ```
 
 Импорт после упаковки:
 ```pwsh
-Import-Module ./out/SBPowerShell/0.1.0/SBPowerShell.psd1
+Import-Module ./out/SBPowerShell/0.1.1/SBPowerShell.psd1
 ```
