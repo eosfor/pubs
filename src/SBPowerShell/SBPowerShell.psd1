@@ -51,7 +51,10 @@
         'Get-SBQueue',
         'New-SBQueue',
         'Set-SBQueue',
-        'Remove-SBQueue'
+        'Remove-SBQueue',
+        'New-SBTopic',
+        'Set-SBTopic',
+        'Remove-SBTopic'
     )
 
     # Variables to export from this module
