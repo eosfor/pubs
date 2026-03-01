@@ -182,9 +182,9 @@ public sealed class ImportSBTopologyCommand : PSCmdlet
         ApplyTimeSpan(snapshot.AutoDeleteOnIdle, t => options.AutoDeleteOnIdle = t);
         ApplyTimeSpan(snapshot.DuplicateDetectionHistoryTimeWindow, t => options.DuplicateDetectionHistoryTimeWindow = t);
 
-        options.ForwardTo = snapshot.ForwardTo;
-        options.ForwardDeadLetteredMessagesTo = snapshot.ForwardDeadLetteredMessagesTo;
-        options.UserMetadata = snapshot.UserMetadata;
+        if (snapshot.ForwardTo is not null) options.ForwardTo = snapshot.ForwardTo;
+        if (snapshot.ForwardDeadLetteredMessagesTo is not null) options.ForwardDeadLetteredMessagesTo = snapshot.ForwardDeadLetteredMessagesTo;
+        if (snapshot.UserMetadata is not null) options.UserMetadata = snapshot.UserMetadata;
     }
 
     private static void ApplyUpdateQueue(QueueProperties queue, QueueSnapshot snapshot)
@@ -200,9 +200,9 @@ public sealed class ImportSBTopologyCommand : PSCmdlet
         ApplyTimeSpan(snapshot.AutoDeleteOnIdle, t => queue.AutoDeleteOnIdle = t);
         ApplyTimeSpan(snapshot.DuplicateDetectionHistoryTimeWindow, t => queue.DuplicateDetectionHistoryTimeWindow = t);
 
-        queue.ForwardTo = snapshot.ForwardTo;
-        queue.ForwardDeadLetteredMessagesTo = snapshot.ForwardDeadLetteredMessagesTo;
-        queue.UserMetadata = snapshot.UserMetadata;
+        if (snapshot.ForwardTo is not null) queue.ForwardTo = snapshot.ForwardTo;
+        if (snapshot.ForwardDeadLetteredMessagesTo is not null) queue.ForwardDeadLetteredMessagesTo = snapshot.ForwardDeadLetteredMessagesTo;
+        if (snapshot.UserMetadata is not null) queue.UserMetadata = snapshot.UserMetadata;
     }
 
     private static void ApplyCreateTopic(CreateTopicOptions options, TopicSnapshot snapshot)
@@ -218,7 +218,7 @@ public sealed class ImportSBTopologyCommand : PSCmdlet
         ApplyTimeSpan(snapshot.AutoDeleteOnIdle, t => options.AutoDeleteOnIdle = t);
         ApplyTimeSpan(snapshot.DuplicateDetectionHistoryTimeWindow, t => options.DuplicateDetectionHistoryTimeWindow = t);
 
-        options.UserMetadata = snapshot.UserMetadata;
+        if (snapshot.UserMetadata is not null) options.UserMetadata = snapshot.UserMetadata;
     }
 
     private static void ApplyUpdateTopic(TopicProperties topic, TopicSnapshot snapshot)
@@ -231,7 +231,7 @@ public sealed class ImportSBTopologyCommand : PSCmdlet
         ApplyTimeSpan(snapshot.AutoDeleteOnIdle, t => topic.AutoDeleteOnIdle = t);
         ApplyTimeSpan(snapshot.DuplicateDetectionHistoryTimeWindow, t => topic.DuplicateDetectionHistoryTimeWindow = t);
 
-        topic.UserMetadata = snapshot.UserMetadata;
+        if (snapshot.UserMetadata is not null) topic.UserMetadata = snapshot.UserMetadata;
     }
 
     private static void ApplyCreateSubscription(CreateSubscriptionOptions options, SubscriptionSnapshot snapshot)
@@ -246,9 +246,9 @@ public sealed class ImportSBTopologyCommand : PSCmdlet
         ApplyTimeSpan(snapshot.DefaultMessageTimeToLive, t => options.DefaultMessageTimeToLive = t);
         ApplyTimeSpan(snapshot.AutoDeleteOnIdle, t => options.AutoDeleteOnIdle = t);
 
-        options.ForwardTo = snapshot.ForwardTo;
-        options.ForwardDeadLetteredMessagesTo = snapshot.ForwardDeadLetteredMessagesTo;
-        options.UserMetadata = snapshot.UserMetadata;
+        if (snapshot.ForwardTo is not null) options.ForwardTo = snapshot.ForwardTo;
+        if (snapshot.ForwardDeadLetteredMessagesTo is not null) options.ForwardDeadLetteredMessagesTo = snapshot.ForwardDeadLetteredMessagesTo;
+        if (snapshot.UserMetadata is not null) options.UserMetadata = snapshot.UserMetadata;
     }
 
     private static void ApplyUpdateSubscription(SubscriptionProperties subscription, SubscriptionSnapshot snapshot)
@@ -262,9 +262,9 @@ public sealed class ImportSBTopologyCommand : PSCmdlet
         ApplyTimeSpan(snapshot.DefaultMessageTimeToLive, t => subscription.DefaultMessageTimeToLive = t);
         ApplyTimeSpan(snapshot.AutoDeleteOnIdle, t => subscription.AutoDeleteOnIdle = t);
 
-        subscription.ForwardTo = snapshot.ForwardTo;
-        subscription.ForwardDeadLetteredMessagesTo = snapshot.ForwardDeadLetteredMessagesTo;
-        subscription.UserMetadata = snapshot.UserMetadata;
+        if (snapshot.ForwardTo is not null) subscription.ForwardTo = snapshot.ForwardTo;
+        if (snapshot.ForwardDeadLetteredMessagesTo is not null) subscription.ForwardDeadLetteredMessagesTo = snapshot.ForwardDeadLetteredMessagesTo;
+        if (snapshot.UserMetadata is not null) subscription.UserMetadata = snapshot.UserMetadata;
     }
 
     private static RuleFilter BuildFilter(RuleSnapshot rule)
