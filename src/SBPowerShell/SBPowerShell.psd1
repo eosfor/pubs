@@ -61,7 +61,9 @@
         'Get-SBRule',
         'New-SBRule',
         'Set-SBRule',
-        'Remove-SBRule'
+        'Remove-SBRule',
+        'Send-SBScheduledMessage',
+        'Remove-SBScheduledMessage'
     )
 
     # Variables to export from this module
