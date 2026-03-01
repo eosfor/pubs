@@ -5,72 +5,96 @@ online version:
 schema: 2.0.0
 ---
 
-# Get-SBSessionState
+# Get-SBSession
 
 ## SYNOPSIS
-Reads and returns Service Bus SBSessionState operations.
+Reads and returns Service Bus SBSession operations.
 
 ## SYNTAX
 
-### Queue (Default)
+### Subscription (Default)
 ```
-Get-SBSessionState -ServiceBusConnectionString <String> -SessionId <String> -Queue <String> [-AsString]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
-```
-
-### Subscription
-```
-Get-SBSessionState -ServiceBusConnectionString <String> -SessionId <String> -Topic <String>
- -Subscription <String> [-AsString] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBSession -ServiceBusConnectionString <String> [-Topic] <String> [-Subscription] <String> [-ActiveOnly]
+ [-LastUpdatedSince <DateTime>] [-OperationTimeoutSec <Int32>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
-### SessionInfo
+### Queue
 ```
-Get-SBSessionState -ServiceBusConnectionString <String> -InputObject <SBSessionInfo> [-AsString]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBSession -ServiceBusConnectionString <String> [-Queue] <String> [-ActiveOnly]
+ [-LastUpdatedSince <DateTime>] [-OperationTimeoutSec <Int32>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Context
 ```
-Get-SBSessionState [-ServiceBusConnectionString <String>] [-InputObject <SBSessionInfo>] [-AsString]
- -SessionContext <SessionContext> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBSession [-ServiceBusConnectionString <String>] -SessionContext <SessionContext>
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSessionState.
-The command supports parameter sets: 'Context', 'Queue', 'Subscription'.
-Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSession. The command supports parameter sets: 'Context', 'Queue', 'Subscription'. Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES
 
 ### Example 1 (Context)
 ```powershell
-PS C:\\> Get-SBSessionState -SessionContext <SessionContext>
+PS C:\\> Get-SBSession -SessionContext <SessionContext>
 ```
 
-Runs Get-SBSessionState using the 'Context' parameter set.
+Runs Get-SBSession using the 'Context' parameter set.
 
 ### Example 2 (Queue)
 ```powershell
-PS C:\\> Get-SBSessionState -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>' -SessionId '<session-id>'
+PS C:\\> Get-SBSession -ServiceBusConnectionString '<connection-string>' -Queue '<queue-name>'
 ```
 
-Runs Get-SBSessionState using the 'Queue' parameter set.
+Runs Get-SBSession using the 'Queue' parameter set.
 
 
 ## PARAMETERS
 
-### -AsString
-Specifies the AsString value for this command.
+### -ActiveOnly
+Specifies the ActiveOnly value for this command.
 
 ```yaml
 Type: SwitchParameter
-Parameter Sets: (All)
+Parameter Sets: Subscription, Queue
 Aliases:
 
 Required: False
 Position: Named
-Default value: False
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -LastUpdatedSince
+Specifies the LastUpdatedSince value for this command.
+
+```yaml
+Type: DateTime
+Parameter Sets: Subscription, Queue
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -OperationTimeoutSec
+Specifies the OperationTimeoutSec value for this command.
+
+```yaml
+Type: Int32
+Parameter Sets: Subscription, Queue
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -84,7 +108,7 @@ Parameter Sets: Queue
 Aliases:
 
 Required: True
-Position: Named
+Position: 0
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -95,7 +119,7 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Queue, Subscription, SessionInfo
+Parameter Sets: Subscription, Queue
 Aliases:
 
 Required: True
@@ -132,21 +156,6 @@ Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
-### -SessionId
-Session identifier for session-enabled entities.
-
-```yaml
-Type: String
-Parameter Sets: Queue, Subscription
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
 ### -Subscription
 Subscription name to target.
 
@@ -156,7 +165,7 @@ Parameter Sets: Subscription
 Aliases:
 
 Required: True
-Position: Named
+Position: 1
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -171,7 +180,7 @@ Parameter Sets: Subscription
 Aliases:
 
 Required: True
-Position: Named
+Position: 0
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -192,33 +201,6 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -InputObject
-Specifies the InputObject value for this command.
-
-```yaml
-Type: SBSessionInfo
-Parameter Sets: SessionInfo
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: True (ByValue)
-Accept wildcard characters: False
-```
-
-```yaml
-Type: SBSessionInfo
-Parameter Sets: Context
-Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: True (ByValue)
-Accept wildcard characters: False
-```
-
 ### CommonParameters
 This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutVariable, -OutBuffer, -PipelineVariable, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](http://go.microsoft.com/fwlink/?LinkID=113216).
 
@@ -227,7 +209,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ### SBPowerShell.Models.SessionContext
 ## OUTPUTS
 
-### System.Object
+### SBPowerShell.Models.SBSessionInfo
 ## NOTES
 
 ## RELATED LINKS

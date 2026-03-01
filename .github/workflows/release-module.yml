@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/help/Generate-PlatyPsHelp.ps1 `
-            -ModuleManifestPath ./src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1 `
+            -ModuleManifestPath ./src/SBPowerShell/bin/Release/net8.0/pubs.psd1 `
             -OutputFolder ./docs/help `
             -ExternalHelpOutputPath ./src/SBPowerShell/bin/Release/net8.0/en-US
 
@@ -62,10 +62,12 @@ jobs:
         id: meta
         shell: pwsh
         run: |
-          $manifest = Import-PowerShellDataFile -Path ./src/SBPowerShell/SBPowerShell.psd1
+          $manifestPath = "./src/SBPowerShell/pubs.psd1"
+          $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
+          $manifest = Import-PowerShellDataFile -Path $manifestPath
           $version = $manifest.ModuleVersion.ToString()
-          $moduleDir = (Resolve-Path "./out/SBPowerShell/$version").Path
-          $zipPath = (Resolve-Path "./out").Path + "/SBPowerShell.$version.zip"
+          $moduleDir = (Resolve-Path "./out/$moduleName/$version").Path
+          $zipPath = (Resolve-Path "./out").Path + "/$moduleName.$version.zip"
           $eventName = "${{ github.event_name }}"
           $refType = "${{ github.ref_type }}"
           $refName = "${{ github.ref_name }}"
@@ -77,6 +79,7 @@ jobs:
             "v$version"
           }
 
+          "module_name=$moduleName" >> $env:GITHUB_OUTPUT
           "version=$version" >> $env:GITHUB_OUTPUT
           "module_dir=$moduleDir" >> $env:GITHUB_OUTPUT
           "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
@@ -97,12 +100,13 @@ jobs:
             throw "Tag '$actualTag' does not match module version '$version' (expected '$expectedTag')."
           }
 
-          $moduleManifestPath = "${{ steps.meta.outputs.module_dir }}/SBPowerShell.psd1"
+          $moduleName = "${{ steps.meta.outputs.module_name }}"
+          $moduleManifestPath = "${{ steps.meta.outputs.module_dir }}/$moduleName.psd1"
           $manifest = Import-PowerShellDataFile -Path $moduleManifestPath
           $expectedCmdlets = @($manifest.CmdletsToExport | Sort-Object -Unique)
 
           Import-Module $moduleManifestPath -Force
-          $actualCmdlets = @(Get-Command -Module SBPowerShell | Select-Object -ExpandProperty Name | Sort-Object -Unique)
+          $actualCmdlets = @(Get-Command -Module $moduleName | Select-Object -ExpandProperty Name | Sort-Object -Unique)
 
           $missingCmdlets = @($expectedCmdlets | Where-Object { $_ -notin $actualCmdlets })
           $unexpectedCmdlets = @($actualCmdlets | Where-Object { $_ -notin $expectedCmdlets })
@@ -129,19 +133,19 @@ jobs:
       - name: Create release zip
         run: |
           cd out
-          zip -r "SBPowerShell.${{ steps.meta.outputs.version }}.zip" "SBPowerShell/${{ steps.meta.outputs.version }}"
+          zip -r "${{ steps.meta.outputs.module_name }}.${{ steps.meta.outputs.version }}.zip" "${{ steps.meta.outputs.module_name }}/${{ steps.meta.outputs.version }}"
 
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SBPowerShell-${{ steps.meta.outputs.version }}
+          name: ${{ steps.meta.outputs.module_name }}-${{ steps.meta.outputs.version }}
           path: ${{ steps.meta.outputs.zip_path }}
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: SBPowerShell ${{ steps.meta.outputs.version }}
+          name: ${{ steps.meta.outputs.module_name }} ${{ steps.meta.outputs.version }}
           files: ${{ steps.meta.outputs.zip_path }}
           generate_release_notes: true
 

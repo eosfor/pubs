@@ -1,5 +1,5 @@
 param(
-    [string]$ModuleManifestPath = "./src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1",
+    [string]$ModuleManifestPath = "./src/SBPowerShell/bin/Debug/net8.0/pubs.psd1",
     [string]$OutputFolder = "./docs/help",
     [string]$ExternalHelpOutputPath = "./src/SBPowerShell/bin/Debug/net8.0/en-US"
 )
@@ -232,10 +232,12 @@ function Get-ExampleBlock {
 Import-Module platyPS -Force
 Import-Module $ModuleManifestPath -Force
 
-New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
-New-MarkdownHelp -Module SBPowerShell -OutputFolder $OutputFolder -Force -WithModulePage | Out-Null
+$moduleName = [System.IO.Path]::GetFileNameWithoutExtension((Resolve-Path $ModuleManifestPath).Path)
 
-$commands = Get-Command -Module SBPowerShell | Sort-Object Name
+New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
+New-MarkdownHelp -Module $moduleName -OutputFolder $OutputFolder -Force -WithModulePage | Out-Null
+
+$commands = Get-Command -Module $moduleName | Sort-Object Name
 
 foreach ($command in $commands) {
     $path = Join-Path $OutputFolder ($command.Name + ".md")
@@ -264,12 +266,12 @@ foreach ($command in $commands) {
     Set-Content -Path $path -Value $content -NoNewline
 }
 
-$modulePagePath = Join-Path $OutputFolder "SBPowerShell.md"
+$modulePagePath = Join-Path $OutputFolder "$moduleName.md"
 if (Test-Path $modulePagePath) {
     $modulePage = Get-Content -Path $modulePagePath -Raw
     $modulePage = $modulePage.Replace("{{ Update Download Link }}", "https://github.com/eosfor/pubs")
     $modulePage = $modulePage.Replace("{{ Please enter version of help manually (X.X.X.X) format }}", "1.0.0.0")
-    $modulePage = $modulePage.Replace("{{ Fill in the Description }}", "SBPowerShell module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.")
+    $modulePage = $modulePage.Replace("{{ Fill in the Description }}", "$moduleName module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.")
 
     foreach ($command in $commands) {
         $synopsis = Get-SynopsisText -Command $command

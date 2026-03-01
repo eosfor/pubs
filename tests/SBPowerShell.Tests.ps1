@@ -4,10 +4,10 @@ $script:repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $script:repoRoot) { $script:repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $script:repoRoot) { $script:repoRoot = (Get-Location).Path }
 Write-Host "repoRoot=$script:repoRoot"
-$modulePath = Join-Path $repoRoot 'src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1'
+$modulePath = Join-Path $repoRoot 'src/SBPowerShell/bin/Debug/net8.0/pubs.psd1'
 if (-not (Test-Path $modulePath)) {
     Write-Host "Build Debug first; falling back to Release."
-    $modulePath = Join-Path $repoRoot 'src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1'
+    $modulePath = Join-Path $repoRoot 'src/SBPowerShell/bin/Release/net8.0/pubs.psd1'
 }
 
 if (-not (Test-Path $modulePath)) {
@@ -153,10 +153,10 @@ Describe "SBPowerShell cmdlets against emulator" {
             if (-not $script:repoRoot) { $script:repoRoot = (Get-Location).Path }
         }
 
-        $script:modulePath = Join-Path $script:repoRoot 'src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1'
+        $script:modulePath = Join-Path $script:repoRoot 'src/SBPowerShell/bin/Debug/net8.0/pubs.psd1'
         if (-not (Test-Path $script:modulePath)) {
             Write-Host "Build Debug first; falling back to Release."
-            $script:modulePath = Join-Path $script:repoRoot 'src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1'
+            $script:modulePath = Join-Path $script:repoRoot 'src/SBPowerShell/bin/Release/net8.0/pubs.psd1'
         }
         if (-not (Test-Path $script:modulePath)) {
             throw "Module manifest not found. Run 'dotnet build src/SBPowerShell/SBPowerShell.csproj'."

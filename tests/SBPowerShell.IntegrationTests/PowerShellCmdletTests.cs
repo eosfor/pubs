@@ -35,12 +35,12 @@ public class ServiceBusFixture : IAsyncLifetime
         var sasKey = GetEnvValue("SAS_KEY_VALUE") ?? throw new InvalidOperationException("SAS_KEY_VALUE missing in .env");
         ConnectionString = $"Endpoint=sb://{EmulatorHost};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey={sasKey};UseDevelopmentEmulator=true;";
 
-        ModulePath = Path.Combine(AppContext.BaseDirectory, "SBPowerShell.psd1");
+        ModulePath = Path.Combine(AppContext.BaseDirectory, "pubs.psd1");
         if (!File.Exists(ModulePath))
         {
             // fallback to module output in project bin
-            var debugModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Debug", "net8.0", "SBPowerShell.psd1");
-            var releaseModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Release", "net8.0", "SBPowerShell.psd1");
+            var debugModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Debug", "net8.0", "pubs.psd1");
+            var releaseModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Release", "net8.0", "pubs.psd1");
             ModulePath = File.Exists(debugModule) ? debugModule : releaseModule;
         }
     }

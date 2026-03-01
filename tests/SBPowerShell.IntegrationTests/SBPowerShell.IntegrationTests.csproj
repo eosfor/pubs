@@ -15,8 +15,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/SBPowerShell/SBPowerShell.csproj" />
-    <None Include="../../src/SBPowerShell/SBPowerShell.psd1">
-      <Link>SBPowerShell.psd1</Link>
+    <None Include="../../src/SBPowerShell/pubs.psd1">
+      <Link>pubs.psd1</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

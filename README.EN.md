@@ -41,8 +41,14 @@ pwsh -NoLogo          # run the commands below in PowerShell
 
 Import module from build output:
 ```pwsh
-$module = "src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1"
+$module = "src/SBPowerShell/bin/Debug/net8.0/pubs.psd1"
 Import-Module $module -Force
+```
+
+Install from PowerShell Gallery:
+```pwsh
+Install-Module pubs -Scope CurrentUser
+Import-Module pubs
 ```
 
 Send and receive:
@@ -274,7 +280,7 @@ Messages with `order` lower than the current expected value are treated as stale
 1. Ensure emulator entities exist: `NO_SESSION/NO_SESS_SUB` and `ORDERED_TOPIC/SESS_SUB` (present by default in `emulator/config.json`).
 2. Open 2 PowerShell windows. In both windows, load the module and set the connection string. In the second window, also load the script:
 ```pwsh
-$module = "src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1"
+$module = "src/SBPowerShell/bin/Debug/net8.0/pubs.psd1"
 Import-Module $module -Force
 $cs = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
 
@@ -332,11 +338,11 @@ docker compose -f docker-compose.sbus.yml ps        # check status
 - Pipeline steps:
   - builds module (`Release/net8.0`);
   - generates markdown help and external help XML (`docs/help` + `en-US/SBPowerShell.dll-Help.xml`);
-  - packs module into zip (`out/SBPowerShell.<version>.zip`);
+  - packs module into zip (`out/pubs.<version>.zip`);
   - publishes zip to GitHub Releases;
   - publishes module to PowerShell Gallery.
 - Triggers:
-  - push to `main` (auto-publish using module version from `SBPowerShell.psd1`);
+  - push to `main` (auto-publish using module version from `pubs.psd1`);
   - tag push `v*` (for example `v0.1.1`);
   - manual run (`workflow_dispatch`).
 - Required secret:
@@ -353,7 +359,7 @@ pwsh scripts/manual/receive-100.ps1
 ```
 
 ## Module Packaging
-Script packs module into `out/SBPowerShell/<version>` with dependencies:
+Script packs module into `out/pubs/<version>` with dependencies:
 ```pwsh
 ./scripts/pack-module.ps1            # Release, net8.0, version from psd1
 ./scripts/pack-module.ps1 -Configuration Debug
@@ -362,5 +368,5 @@ Script packs module into `out/SBPowerShell/<version>` with dependencies:
 
 Import after packaging:
 ```pwsh
-Import-Module ./out/SBPowerShell/0.1.1/SBPowerShell.psd1
+Import-Module ./out/pubs/0.1.1/pubs.psd1
 ```
