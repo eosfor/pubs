@@ -47,7 +47,8 @@
         'Clear-SBQueue',
         'Clear-SBSubscription',
         'Get-SBTopic',
-        'Get-SBSubscription'
+        'Get-SBSubscription',
+        'Get-SBSession'
     )
 
     # Variables to export from this module

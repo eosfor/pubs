@@ -15,6 +15,7 @@ PowerShell module for Azure Service Bus and local Service Bus Emulator workflows
 - `Clear-SBQueue`, `Clear-SBSubscription` - clear queue or subscription in batches.
 - `Get-SBTopic` - list topics with SDK metadata (`TopicProperties`) and runtime data.
 - `Get-SBSubscription` - list subscriptions for a topic with metadata (`SubscriptionProperties`) and runtime data, including message counts.
+- `Get-SBSession` - enumerate session ids for a queue or topic/subscription via a low-level AMQP management operation.
 
 ## Requirements
 - .NET 8/9 SDK for build.
@@ -100,6 +101,10 @@ Receive-SBMessage -Queue "session-queue" -ServiceBusConnectionString $conn -MaxM
 # Send-SBMessage -Topic "session-topic" -Message ($s1 + $s2) -ServiceBusConnectionString $conn -PerSessionThreadAuto
 # Receive-SBMessage -Topic "session-topic" -Subscription "session-sub" -ServiceBusConnectionString $conn -MaxMessages 6
 ```
+
+`Get-SBSession` usage and manual verification are documented in detail in:
+- [`sessions.en.md`](sessions.en.md) (English)
+- [`sessions.md`](sessions.md) (Russian)
 
 Message creation in loops with explicit type casting:
 ```pwsh
