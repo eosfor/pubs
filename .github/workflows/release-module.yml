@@ -1,0 +1,154 @@
+name: Release Module
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (for example: v0.1.0)"
+        required: true
+        default: "v0.1.0"
+      publish_to_gallery:
+        description: "Publish module to PowerShell Gallery"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-package-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build module (Release/net8.0)
+        run: dotnet build src/SBPowerShell/SBPowerShell.csproj -c Release /p:TargetFramework=net8.0 --no-restore
+
+      - name: Install platyPS
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module platyPS -Scope CurrentUser -Force -AllowClobber
+
+      - name: Generate markdown + external help
+        shell: pwsh
+        run: |
+          ./scripts/help/Generate-PlatyPsHelp.ps1 `
+            -ModuleManifestPath ./src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1 `
+            -OutputFolder ./docs/help `
+            -ExternalHelpOutputPath ./src/SBPowerShell/bin/Release/net8.0/en-US
+
+      - name: Pack module
+        shell: pwsh
+        run: ./scripts/pack-module.ps1 -Configuration Release -Framework net8.0
+
+      - name: Resolve release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $manifest = Import-PowerShellDataFile -Path ./src/SBPowerShell/SBPowerShell.psd1
+          $version = $manifest.ModuleVersion.ToString()
+          $moduleDir = (Resolve-Path "./out/SBPowerShell/$version").Path
+          $zipPath = (Resolve-Path "./out").Path + "/SBPowerShell.$version.zip"
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "module_dir=$moduleDir" >> $env:GITHUB_OUTPUT
+          "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Validate tag and packaged module
+        shell: pwsh
+        run: |
+          $version = "${{ steps.meta.outputs.version }}"
+          $expectedTag = "v$version"
+          $actualTag = "${{ steps.meta.outputs.tag }}"
+
+          if ([string]::IsNullOrWhiteSpace($actualTag)) {
+            throw "Resolved release tag is empty."
+          }
+
+          if ($actualTag -ne $expectedTag) {
+            throw "Tag '$actualTag' does not match module version '$version' (expected '$expectedTag')."
+          }
+
+          $moduleManifestPath = "${{ steps.meta.outputs.module_dir }}/SBPowerShell.psd1"
+          $manifest = Import-PowerShellDataFile -Path $moduleManifestPath
+          $expectedCmdlets = @($manifest.CmdletsToExport | Sort-Object -Unique)
+
+          Import-Module $moduleManifestPath -Force
+          $actualCmdlets = @(Get-Command -Module SBPowerShell | Select-Object -ExpandProperty Name | Sort-Object -Unique)
+
+          $missingCmdlets = @($expectedCmdlets | Where-Object { $_ -notin $actualCmdlets })
+          $unexpectedCmdlets = @($actualCmdlets | Where-Object { $_ -notin $expectedCmdlets })
+
+          if ($missingCmdlets.Count -gt 0 -or $unexpectedCmdlets.Count -gt 0) {
+            throw "Cmdlet export mismatch. Missing: $($missingCmdlets -join ', '). Unexpected: $($unexpectedCmdlets -join ', ')."
+          }
+
+          $brokenHelp = [System.Collections.Generic.List[string]]::new()
+          foreach ($cmd in $expectedCmdlets) {
+            $help = Get-Help $cmd -Full
+            $synopsis = [string]$help.Synopsis
+            $description = [string](($help.Description | ForEach-Object Text) -join " ")
+
+            if ([string]::IsNullOrWhiteSpace($synopsis) -or [string]::IsNullOrWhiteSpace($description)) {
+              $brokenHelp.Add($cmd)
+            }
+          }
+
+          if ($brokenHelp.Count -gt 0) {
+            throw "External help is incomplete for: $($brokenHelp -join ', ')"
+          }
+
+      - name: Create release zip
+        run: |
+          cd out
+          zip -r "SBPowerShell.${{ steps.meta.outputs.version }}.zip" "SBPowerShell/${{ steps.meta.outputs.version }}"
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBPowerShell-${{ steps.meta.outputs.version }}
+          path: ${{ steps.meta.outputs.zip_path }}
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: SBPowerShell ${{ steps.meta.outputs.version }}
+          files: ${{ steps.meta.outputs.zip_path }}
+          generate_release_notes: true
+
+      - name: Publish to PowerShell Gallery
+        if: |
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+          (github.event_name == 'workflow_dispatch' && inputs.publish_to_gallery == true)
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PSGALLERY_API_KEY)) {
+            throw "Missing required secret: PSGALLERY_API_KEY"
+          }
+
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Publish-Module `
+            -Path "${{ steps.meta.outputs.module_dir }}" `
+            -Repository PSGallery `
+            -NuGetApiKey $env:PSGALLERY_API_KEY `
+            -Force

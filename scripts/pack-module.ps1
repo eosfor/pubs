@@ -41,8 +41,14 @@ Copy-Item -Path $manifestPath -Destination $targetDir -Force
 
 # copy binaries and dependency payload
 Get-ChildItem -Path $buildDir -File |
-    Where-Object { $_.Extension -in '.dll', '.pdb', '.json' } |
+    Where-Object { $_.Extension -in '.dll', '.pdb', '.json', '.xml', '.ps1xml' } |
     ForEach-Object { Copy-Item -Path $_.FullName -Destination $targetDir -Force }
+
+# copy localized external help if present (for Get-Help)
+$localizedHelpDir = Join-Path $buildDir 'en-US'
+if (Test-Path $localizedHelpDir) {
+    Copy-Item -Path $localizedHelpDir -Destination $targetDir -Recurse -Force
+}
 
 Test-ModuleManifest -Path (Join-Path $targetDir 'SBPowerShell.psd1') | Out-Null
 
