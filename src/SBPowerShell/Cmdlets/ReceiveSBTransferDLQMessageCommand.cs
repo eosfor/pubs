@@ -112,7 +112,7 @@ public sealed class ReceiveSBTransferDLQMessageCommand : PSCmdlet
         ServiceBusClient? client = null;
         try
         {
-            client = new ServiceBusClient(ServiceBusConnectionString);
+            client = new ServiceBusClient(ServiceBusConnectionString, CreateClientOptions(plan));
 
             if (IsQueueSet)
             {
@@ -184,13 +184,7 @@ public sealed class ReceiveSBTransferDLQMessageCommand : PSCmdlet
                     return;
                 }
 
-                IReadOnlyList<ServiceBusReceivedMessage> messages = peek
-                    ? receiver.PeekMessagesAsync(BatchSize, cancellationToken: cancellationToken)
-                        .GetAwaiter()
-                        .GetResult()
-                    : receiver.ReceiveMessagesAsync(BatchSize, window, cancellationToken)
-                        .GetAwaiter()
-                        .GetResult();
+                IReadOnlyList<ServiceBusReceivedMessage> messages = ReceiveBatch(receiver, peek, window, cancellationToken, plan.HasDeadline);
 
                 if (messages.Count == 0)
                 {
@@ -233,6 +227,36 @@ public sealed class ReceiveSBTransferDLQMessageCommand : PSCmdlet
             {
                 receiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
+        }
+    }
+
+    private IReadOnlyList<ServiceBusReceivedMessage> ReceiveBatch(
+        ServiceBusReceiver receiver,
+        bool peek,
+        TimeSpan window,
+        CancellationToken cancellationToken,
+        bool hasDeadline)
+    {
+        using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        receiveCts.CancelAfter(window);
+
+        try
+        {
+            return peek
+                ? receiver.PeekMessagesAsync(BatchSize, cancellationToken: receiveCts.Token)
+                    .GetAwaiter()
+                    .GetResult()
+                : receiver.ReceiveMessagesAsync(BatchSize, window, receiveCts.Token)
+                    .GetAwaiter()
+                    .GetResult();
+        }
+        catch (OperationCanceledException) when (receiveCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            return Array.Empty<ServiceBusReceivedMessage>();
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.ServiceTimeout && hasDeadline)
+        {
+            return Array.Empty<ServiceBusReceivedMessage>();
         }
     }
 
@@ -310,6 +334,20 @@ public sealed class ReceiveSBTransferDLQMessageCommand : PSCmdlet
         int? max = IsMaxParameterSet ? MaxMessages : null;
         int? waitSeconds = IsWaitParameterSet ? WaitSeconds : null;
         return new ReceivePlan(max, waitSeconds);
+    }
+
+    private ServiceBusClientOptions CreateClientOptions(ReceivePlan plan)
+    {
+        var options = new ServiceBusClientOptions();
+        if (!plan.HasDeadline)
+        {
+            return options;
+        }
+
+        var boundedTimeout = TimeSpan.FromSeconds(Math.Max(1, Math.Min(WaitSeconds, 30)));
+        options.RetryOptions.TryTimeout = boundedTimeout;
+        options.RetryOptions.MaxRetries = 0;
+        return options;
     }
 
     private bool IsMaxParameterSet =>
