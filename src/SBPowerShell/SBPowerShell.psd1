@@ -54,7 +54,10 @@
         'Remove-SBQueue',
         'New-SBTopic',
         'Set-SBTopic',
-        'Remove-SBTopic'
+        'Remove-SBTopic',
+        'New-SBSubscription',
+        'Set-SBSubscription',
+        'Remove-SBSubscription'
     )
 
     # Variables to export from this module
