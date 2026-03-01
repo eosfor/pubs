@@ -63,7 +63,10 @@
         'Set-SBRule',
         'Remove-SBRule',
         'Send-SBScheduledMessage',
-        'Remove-SBScheduledMessage'
+        'Remove-SBScheduledMessage',
+        'Clear-SBDLQ',
+        'Replay-SBDLQMessage',
+        'Receive-SBTransferDLQMessage'
     )
 
     # Variables to export from this module
