@@ -73,7 +73,9 @@
         'Remove-SBAuthorizationRule',
         'Rotate-SBKey',
         'Get-SBConnectionString',
-        'Set-SBEntityStatus'
+        'Set-SBEntityStatus',
+        'Export-SBTopology',
+        'Import-SBTopology'
     )
 
     # Variables to export from this module
