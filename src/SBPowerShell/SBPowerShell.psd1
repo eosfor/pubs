@@ -57,7 +57,11 @@
         'Remove-SBTopic',
         'New-SBSubscription',
         'Set-SBSubscription',
-        'Remove-SBSubscription'
+        'Remove-SBSubscription',
+        'Get-SBRule',
+        'New-SBRule',
+        'Set-SBRule',
+        'Remove-SBRule'
     )
 
     # Variables to export from this module
