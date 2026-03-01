@@ -3,6 +3,7 @@ using System.Management.Automation;
 using System.Text.Json;
 using System.Threading;
 using Azure.Messaging.ServiceBus;
+using SBPowerShell.Internal;
 using SBPowerShell.Models;
 
 namespace SBPowerShell.Cmdlets;
@@ -55,6 +56,7 @@ public sealed class GetSBSessionStateCommand : PSCmdlet
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             using var scope = CreateReceiverScope(cts.Token, out var receiver);
+            using var renewer = SessionLockAutoRenewer.Start(receiver, cts.Token);
             WriteSessionState(receiver, cts.Token);
         }
         catch (Exception ex)

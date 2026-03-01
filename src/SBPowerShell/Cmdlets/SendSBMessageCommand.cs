@@ -12,29 +12,39 @@ public sealed class SendSBMessageCommand : PSCmdlet
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetTopic = "Topic";
+    private const string ParameterSetContext = "Context";
 
     private readonly List<PSMessage> _messages = new();
+    private readonly List<ServiceBusReceivedMessage> _receivedInputMessages = new();
     private readonly CancellationTokenSource _cts = new();
 
     [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetQueue)]
     [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetTopic)]
+    [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetContext)]
     public PSMessage[]? Message { get; set; }
 
     [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetQueue)]
     [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetTopic)]
+    [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetContext)]
     public ServiceBusReceivedMessage[]? ReceivedInputObject { get; set; }
 
-    [Parameter(Mandatory = true)]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetTopic)]
     [ValidateNotNullOrEmpty]
     public string ServiceBusConnectionString { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetTopic)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
+
+    [Parameter(Mandatory = true, ParameterSetName = ParameterSetContext, ValueFromPipeline = true)]
+    public SessionContext? SessionContext { get; set; }
 
     [Parameter]
     public SwitchParameter PerSessionThreadAuto { get; set; }
@@ -42,6 +52,13 @@ public sealed class SendSBMessageCommand : PSCmdlet
     [Parameter]
     [ValidateRange(0, int.MaxValue)]
     public int PerSessionThread { get; set; }
+
+    [Parameter]
+    [ValidateRange(1, 1000)]
+    public int BatchSize { get; set; } = 100;
+
+    [Parameter]
+    public SwitchParameter PassThru { get; set; }
 
     protected override void ProcessRecord()
     {
@@ -54,6 +71,7 @@ public sealed class SendSBMessageCommand : PSCmdlet
         {
             foreach (var received in ReceivedInputObject)
             {
+                _receivedInputMessages.Add(received);
                 _messages.Add(ConvertFromReceived(received));
             }
         }
@@ -64,6 +82,13 @@ public sealed class SendSBMessageCommand : PSCmdlet
         try
         {
             SendInternalAsync(_cts.Token).GetAwaiter().GetResult();
+            if (PassThru && _receivedInputMessages.Count > 0)
+            {
+                foreach (var received in _receivedInputMessages)
+                {
+                    WriteObject(received);
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -92,6 +117,16 @@ public sealed class SendSBMessageCommand : PSCmdlet
             return;
         }
 
+        if (SessionContext is null && string.IsNullOrWhiteSpace(ServiceBusConnectionString))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("ServiceBusConnectionString is required when SessionContext is not provided."),
+                "SendSBMessageMissingConnectionString",
+                ErrorCategory.InvalidArgument,
+                this));
+            return;
+        }
+
         if (PerSessionThreadAuto && PerSessionThread > 0)
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -102,7 +137,23 @@ public sealed class SendSBMessageCommand : PSCmdlet
             return;
         }
 
-        var entity = ParameterSetName == ParameterSetQueue ? Queue : Topic;
+        if (ParameterSetName == ParameterSetContext && (PerSessionThreadAuto || PerSessionThread > 0))
+        {
+            ThrowTerminatingError(new ErrorRecord(
+                new ArgumentException("SessionContext mode does not support -PerSessionThreadAuto or -PerSessionThread."),
+                "SendSBMessageContextParallelNotSupported",
+                ErrorCategory.InvalidArgument,
+                this));
+            return;
+        }
+
+        var messages = FlattenMessages(_messages);
+        if (messages.Count == 0)
+        {
+            return;
+        }
+
+        var entity = ResolveTargetEntity();
         if (string.IsNullOrWhiteSpace(entity))
         {
             ThrowTerminatingError(new ErrorRecord(
@@ -113,16 +164,32 @@ public sealed class SendSBMessageCommand : PSCmdlet
             return;
         }
 
-        await using var client = new ServiceBusClient(ServiceBusConnectionString);
-
-        if (PerSessionThreadAuto || PerSessionThread > 0)
+        ServiceBusClient? ownedClient = null;
+        var client = SessionContext?.Client;
+        if (client is null)
         {
-            EnsureAllHaveSessionId();
-            await SendPerSessionAsync(client, entity, cancellationToken);
+            ownedClient = new ServiceBusClient(ServiceBusConnectionString);
+            client = ownedClient;
         }
-        else
+
+        try
         {
-            await SendSequentialAsync(client, entity, cancellationToken);
+            if (PerSessionThreadAuto || PerSessionThread > 0)
+            {
+                EnsureAllHaveSessionId();
+                await SendPerSessionAsync(client, entity, messages, cancellationToken);
+            }
+            else
+            {
+                await SendSequentialAsync(client, entity, messages, cancellationToken);
+            }
+        }
+        finally
+        {
+            if (ownedClient is not null)
+            {
+                await ownedClient.DisposeAsync();
+            }
         }
     }
 
@@ -139,20 +206,68 @@ public sealed class SendSBMessageCommand : PSCmdlet
         }
     }
 
-    private async Task SendSequentialAsync(ServiceBusClient client, string entity, CancellationToken cancellationToken)
+    private string ResolveTargetEntity()
     {
-        await using var sender = client.CreateSender(entity);
-
-        foreach (var sbMessage in FlattenMessages(_messages))
+        if (ParameterSetName == ParameterSetQueue)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await sender.SendMessageAsync(sbMessage, cancellationToken);
+            return Queue;
         }
+
+        if (ParameterSetName == ParameterSetTopic)
+        {
+            return Topic;
+        }
+
+        if (!string.IsNullOrWhiteSpace(Queue) && !string.IsNullOrWhiteSpace(Topic))
+        {
+            throw new ArgumentException("Specify only one explicit destination for SessionContext mode: -Queue or -Topic.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Queue))
+        {
+            return Queue;
+        }
+
+        if (!string.IsNullOrWhiteSpace(Topic))
+        {
+            return Topic;
+        }
+
+        if (SessionContext is null)
+        {
+            return string.Empty;
+        }
+
+        if (SessionContext.IsQueue && !string.IsNullOrWhiteSpace(SessionContext.QueueName))
+        {
+            return SessionContext.QueueName;
+        }
+
+        if (SessionContext.IsSubscription && !string.IsNullOrWhiteSpace(SessionContext.TopicName))
+        {
+            return SessionContext.TopicName;
+        }
+
+        var entityPath = SessionContext.EntityPath ?? string.Empty;
+        var marker = "/Subscriptions/";
+        var idx = entityPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0)
+        {
+            return entityPath[..idx];
+        }
+
+        return entityPath;
     }
 
-    private async Task SendPerSessionAsync(ServiceBusClient client, string entity, CancellationToken cancellationToken)
+    private async Task SendSequentialAsync(ServiceBusClient client, string entity, IReadOnlyList<ServiceBusMessage> messages, CancellationToken cancellationToken)
     {
-        var grouped = FlattenMessages(_messages)
+        await using var sender = client.CreateSender(entity);
+        await SendBatchedAsync(sender, messages, cancellationToken);
+    }
+
+    private async Task SendPerSessionAsync(ServiceBusClient client, string entity, IReadOnlyList<ServiceBusMessage> messages, CancellationToken cancellationToken)
+    {
+        var grouped = messages
             .GroupBy(m => m.SessionId)
             .ToList();
 
@@ -162,7 +277,7 @@ public sealed class SendSBMessageCommand : PSCmdlet
         {
             if (PerSessionThreadAuto)
             {
-                tasks.Add(SendSessionSequentialAsync(client, entity, group.ToList(), cancellationToken));
+                tasks.Add(SendSessionSequentialAsync(client, entity, group.ToList(), BatchSize, cancellationToken));
             }
             else
             {
@@ -173,13 +288,54 @@ public sealed class SendSBMessageCommand : PSCmdlet
         await Task.WhenAll(tasks);
     }
 
-    private static async Task SendSessionSequentialAsync(ServiceBusClient client, string entity, IReadOnlyList<ServiceBusMessage> messages, CancellationToken cancellationToken)
+    private static async Task SendSessionSequentialAsync(ServiceBusClient client, string entity, IReadOnlyList<ServiceBusMessage> messages, int batchSize, CancellationToken cancellationToken)
     {
         await using var sender = client.CreateSender(entity);
-        foreach (var msg in messages)
+        ServiceBusMessageBatch? batch = null;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await sender.SendMessageAsync(msg, cancellationToken);
+            batch = await sender.CreateMessageBatchAsync(cancellationToken);
+            var inBatch = 0;
+
+            foreach (var msg in messages)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!batch.TryAddMessage(msg))
+                {
+                    if (inBatch == 0)
+                    {
+                        throw new InvalidOperationException("Message is too large to fit into a Service Bus batch.");
+                    }
+
+                    await sender.SendMessagesAsync(batch, cancellationToken);
+                    batch.Dispose();
+                    batch = await sender.CreateMessageBatchAsync(cancellationToken);
+                    inBatch = 0;
+
+                    if (!batch.TryAddMessage(msg))
+                    {
+                        throw new InvalidOperationException("Message is too large to fit into a Service Bus batch.");
+                    }
+                }
+
+                inBatch++;
+                if (inBatch >= batchSize)
+                {
+                    await sender.SendMessagesAsync(batch, cancellationToken);
+                    batch.Dispose();
+                    batch = await sender.CreateMessageBatchAsync(cancellationToken);
+                    inBatch = 0;
+                }
+            }
+
+            if (inBatch > 0)
+            {
+                await sender.SendMessagesAsync(batch, cancellationToken);
+            }
+        }
+        finally
+        {
+            batch?.Dispose();
         }
     }
 
@@ -203,8 +359,58 @@ public sealed class SendSBMessageCommand : PSCmdlet
         await Task.WhenAll(workers);
     }
 
-    private IEnumerable<ServiceBusMessage> FlattenMessages(IEnumerable<PSMessage> messages)
+    private async Task SendBatchedAsync(ServiceBusSender sender, IReadOnlyList<ServiceBusMessage> messages, CancellationToken cancellationToken)
     {
+        ServiceBusMessageBatch? batch = null;
+        try
+        {
+            batch = await sender.CreateMessageBatchAsync(cancellationToken);
+            var inBatch = 0;
+            foreach (var msg in messages)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!batch.TryAddMessage(msg))
+                {
+                    if (inBatch == 0)
+                    {
+                        throw new InvalidOperationException("Message is too large to fit into a Service Bus batch.");
+                    }
+
+                    await sender.SendMessagesAsync(batch, cancellationToken);
+                    batch.Dispose();
+                    batch = await sender.CreateMessageBatchAsync(cancellationToken);
+                    inBatch = 0;
+
+                    if (!batch.TryAddMessage(msg))
+                    {
+                        throw new InvalidOperationException("Message is too large to fit into a Service Bus batch.");
+                    }
+                }
+
+                inBatch++;
+                if (inBatch >= BatchSize)
+                {
+                    await sender.SendMessagesAsync(batch, cancellationToken);
+                    batch.Dispose();
+                    batch = await sender.CreateMessageBatchAsync(cancellationToken);
+                    inBatch = 0;
+                }
+            }
+
+            if (inBatch > 0)
+            {
+                await sender.SendMessagesAsync(batch, cancellationToken);
+            }
+        }
+        finally
+        {
+            batch?.Dispose();
+        }
+    }
+
+    private List<ServiceBusMessage> FlattenMessages(IEnumerable<PSMessage> messages)
+    {
+        var flattened = new List<ServiceBusMessage>();
         foreach (var msg in messages)
         {
             var bodyList = msg.Body ?? Array.Empty<string>();
@@ -212,9 +418,11 @@ public sealed class SendSBMessageCommand : PSCmdlet
 
             foreach (var body in bodyList)
             {
-                yield return BuildServiceBusMessage(msg.SessionId, props, body);
+                flattened.Add(BuildServiceBusMessage(msg.SessionId, props, body));
             }
         }
+
+        return flattened;
     }
 
     private ServiceBusMessage BuildServiceBusMessage(string? sessionId, IReadOnlyDictionary<string, object> customProperties, string body)
