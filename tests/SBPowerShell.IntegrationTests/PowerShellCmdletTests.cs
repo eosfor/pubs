@@ -673,6 +673,26 @@ public class PowerShellCmdletTests
     }
 
     [Fact]
+    public void ReceiveSBMessage_stops_after_WaitSeconds_when_subscription_empty()
+    {
+        _fixture.ClearSubscription("test-topic", "test-sub");
+
+        using var ps = _fixture.CreateShell();
+        var sw = Stopwatch.StartNew();
+        ps.AddCommand("Receive-SBMessage")
+            .AddParameter("Topic", "test-topic")
+            .AddParameter("Subscription", "test-sub")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("WaitSeconds", 1);
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        sw.Stop();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Empty(result);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0, 4);
+    }
+
+    [Fact]
     public void Sends_and_receives_non_session_queue_messages()
     {
         _fixture.ClearQueue("test-queue");
@@ -725,6 +745,26 @@ public class PowerShellCmdletTests
 
         Assert.Empty(result);
         Assert.InRange(sw.Elapsed.TotalSeconds, 0, 3);
+    }
+
+    [Fact]
+    public void ReceiveSBDLQMessage_stops_after_WaitSeconds_when_subscription_dlq_empty()
+    {
+        _fixture.ClearDlqSubscription("test-topic", "test-sub");
+
+        using var ps = _fixture.CreateShell();
+        var sw = Stopwatch.StartNew();
+        ps.AddCommand("Receive-SBDLQMessage")
+            .AddParameter("Topic", "test-topic")
+            .AddParameter("Subscription", "test-sub")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("WaitSeconds", 1);
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        sw.Stop();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Empty(result);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0, 4);
     }
 
     [Fact]

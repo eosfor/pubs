@@ -225,7 +225,7 @@ public sealed class ReceiveSBTransferDLQMessageCommand : PSCmdlet
         {
             if (disposeReceiver)
             {
-                receiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                DisposeReceiver(receiver, suppressTimeoutErrors: plan.HasDeadline);
             }
         }
     }
@@ -324,8 +324,25 @@ public sealed class ReceiveSBTransferDLQMessageCommand : PSCmdlet
             }
             finally
             {
-                sessionReceiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                DisposeReceiver(sessionReceiver, suppressTimeoutErrors: plan.HasDeadline);
             }
+        }
+    }
+
+    private static void DisposeReceiver(ServiceBusReceiver receiver, bool suppressTimeoutErrors)
+    {
+        try
+        {
+            receiver.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (suppressTimeoutErrors)
+        {
+        }
+        catch (TimeoutException) when (suppressTimeoutErrors)
+        {
+        }
+        catch (ServiceBusException ex) when (suppressTimeoutErrors && ex.Reason == ServiceBusFailureReason.ServiceTimeout)
+        {
         }
     }
 
