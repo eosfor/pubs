@@ -66,7 +66,13 @@
         'Remove-SBScheduledMessage',
         'Clear-SBDLQ',
         'Replay-SBDLQMessage',
-        'Receive-SBTransferDLQMessage'
+        'Receive-SBTransferDLQMessage',
+        'Get-SBAuthorizationRule',
+        'New-SBAuthorizationRule',
+        'Set-SBAuthorizationRule',
+        'Remove-SBAuthorizationRule',
+        'Rotate-SBKey',
+        'Get-SBConnectionString'
     )
 
     # Variables to export from this module
