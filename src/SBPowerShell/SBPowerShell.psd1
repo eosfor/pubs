@@ -72,7 +72,8 @@
         'Set-SBAuthorizationRule',
         'Remove-SBAuthorizationRule',
         'Rotate-SBKey',
-        'Get-SBConnectionString'
+        'Get-SBConnectionString',
+        'Set-SBEntityStatus'
     )
 
     # Variables to export from this module
