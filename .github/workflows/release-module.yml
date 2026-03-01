@@ -2,6 +2,8 @@ name: Release Module
 
 on:
   push:
+    branches:
+      - "main"
     tags:
       - "v*"
   workflow_dispatch:
@@ -9,7 +11,7 @@ on:
       tag:
         description: "Release tag (for example: v0.1.0)"
         required: true
-        default: "v0.1.0"
+        default: "v0.1.1"
       publish_to_gallery:
         description: "Publish module to PowerShell Gallery"
         required: true
@@ -64,7 +66,16 @@ jobs:
           $version = $manifest.ModuleVersion.ToString()
           $moduleDir = (Resolve-Path "./out/SBPowerShell/$version").Path
           $zipPath = (Resolve-Path "./out").Path + "/SBPowerShell.$version.zip"
-          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $eventName = "${{ github.event_name }}"
+          $refType = "${{ github.ref_type }}"
+          $refName = "${{ github.ref_name }}"
+          $tag = if ($eventName -eq "workflow_dispatch") {
+            "${{ inputs.tag }}"
+          } elseif ($eventName -eq "push" -and $refType -eq "tag") {
+            $refName
+          } else {
+            "v$version"
+          }
 
           "version=$version" >> $env:GITHUB_OUTPUT
           "module_dir=$moduleDir" >> $env:GITHUB_OUTPUT
@@ -136,7 +147,7 @@ jobs:
 
       - name: Publish to PowerShell Gallery
         if: |
-          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+          (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')) ||
           (github.event_name == 'workflow_dispatch' && inputs.publish_to_gallery == true)
         shell: pwsh
         env:

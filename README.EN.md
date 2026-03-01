@@ -238,7 +238,8 @@ docker compose -f docker-compose.sbus.yml ps        # check status
   - publishes zip to GitHub Releases;
   - publishes module to PowerShell Gallery.
 - Triggers:
-  - tag push `v*` (for example `v0.1.0`);
+  - push to `main` (auto-publish using module version from `SBPowerShell.psd1`);
+  - tag push `v*` (for example `v0.1.1`);
   - manual run (`workflow_dispatch`).
 - Required secret:
   - `PSGALLERY_API_KEY` — PowerShell Gallery API key.
@@ -258,10 +259,10 @@ Script packs module into `out/SBPowerShell/<version>` with dependencies:
 ```pwsh
 ./scripts/pack-module.ps1            # Release, net8.0, version from psd1
 ./scripts/pack-module.ps1 -Configuration Debug
-./scripts/pack-module.ps1 -Version 0.1.0 -Framework net8.0
+./scripts/pack-module.ps1 -Version 0.1.1 -Framework net8.0
 ```
 
 Import after packaging:
 ```pwsh
-Import-Module ./out/SBPowerShell/0.1.0/SBPowerShell.psd1
+Import-Module ./out/SBPowerShell/0.1.1/SBPowerShell.psd1
 ```
