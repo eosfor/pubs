@@ -4,7 +4,7 @@ using Azure.Messaging.ServiceBus;
 
 namespace SBPowerShell.Cmdlets;
 
-[Cmdlet(VerbsData.Export, "SBDLQMessage", DefaultParameterSetName = ParameterSetQueue)]
+[Cmdlet("Replay", "SBDLQMessage", DefaultParameterSetName = ParameterSetQueue)]
 [OutputType(typeof(ServiceBusReceivedMessage))]
 public sealed class ReplaySBDLQMessageCommand : PSCmdlet
 {
