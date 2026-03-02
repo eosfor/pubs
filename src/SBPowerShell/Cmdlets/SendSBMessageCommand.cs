@@ -8,7 +8,7 @@ using SBPowerShell.Models;
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommunications.Send, "SBMessage", DefaultParameterSetName = ParameterSetTopic)]
-public sealed class SendSBMessageCommand : PSCmdlet
+public sealed class SendSBMessageCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetTopic = "Topic";
@@ -29,16 +29,11 @@ public sealed class SendSBMessageCommand : PSCmdlet
     public ServiceBusReceivedMessage[]? ReceivedInputObject { get; set; }
 
     [Parameter(ParameterSetName = ParameterSetQueue)]
-    [Parameter(ParameterSetName = ParameterSetTopic)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
     [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetTopic)]
+    [Parameter(ParameterSetName = ParameterSetTopic)]
     [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
@@ -96,6 +91,11 @@ public sealed class SendSBMessageCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "SendSBMessageFailed", ErrorCategory.NotSpecified, this));
         }
     }
@@ -113,16 +113,6 @@ public sealed class SendSBMessageCommand : PSCmdlet
                 new ArgumentException("No messages provided. Specify -Message or pipe ServiceBusReceivedMessage objects."),
                 "SendSBMessageEmptyInput",
                 ErrorCategory.InvalidData,
-                this));
-            return;
-        }
-
-        if (SessionContext is null && string.IsNullOrWhiteSpace(ServiceBusConnectionString))
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("ServiceBusConnectionString is required when SessionContext is not provided."),
-                "SendSBMessageMissingConnectionString",
-                ErrorCategory.InvalidArgument,
                 this));
             return;
         }
@@ -153,22 +143,19 @@ public sealed class SendSBMessageCommand : PSCmdlet
             return;
         }
 
-        var entity = ResolveTargetEntity();
-        if (string.IsNullOrWhiteSpace(entity))
-        {
-            ThrowTerminatingError(new ErrorRecord(
-                new ArgumentException("Queue or Topic name is required."),
-                "SendSBMessageMissingTarget",
-                ErrorCategory.InvalidArgument,
-                this));
-            return;
-        }
+        var resolvedConnectionString = ResolveConnectionString(SessionContext);
+        var target = ResolveQueueOrTopicTarget(
+            Queue,
+            Topic,
+            SessionContext,
+            resolvedConnectionString);
+        var entity = target.EntityPath;
 
         ServiceBusClient? ownedClient = null;
         var client = SessionContext?.Client;
         if (client is null)
         {
-            ownedClient = new ServiceBusClient(ServiceBusConnectionString);
+            ownedClient = CreateServiceBusClient(resolvedConnectionString);
             client = ownedClient;
         }
 
@@ -204,59 +191,6 @@ public sealed class SendSBMessageCommand : PSCmdlet
                 ErrorCategory.InvalidData,
                 this));
         }
-    }
-
-    private string ResolveTargetEntity()
-    {
-        if (ParameterSetName == ParameterSetQueue)
-        {
-            return Queue;
-        }
-
-        if (ParameterSetName == ParameterSetTopic)
-        {
-            return Topic;
-        }
-
-        if (!string.IsNullOrWhiteSpace(Queue) && !string.IsNullOrWhiteSpace(Topic))
-        {
-            throw new ArgumentException("Specify only one explicit destination for SessionContext mode: -Queue or -Topic.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(Queue))
-        {
-            return Queue;
-        }
-
-        if (!string.IsNullOrWhiteSpace(Topic))
-        {
-            return Topic;
-        }
-
-        if (SessionContext is null)
-        {
-            return string.Empty;
-        }
-
-        if (SessionContext.IsQueue && !string.IsNullOrWhiteSpace(SessionContext.QueueName))
-        {
-            return SessionContext.QueueName;
-        }
-
-        if (SessionContext.IsSubscription && !string.IsNullOrWhiteSpace(SessionContext.TopicName))
-        {
-            return SessionContext.TopicName;
-        }
-
-        var entityPath = SessionContext.EntityPath ?? string.Empty;
-        var marker = "/Subscriptions/";
-        var idx = entityPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (idx >= 0)
-        {
-            return entityPath[..idx];
-        }
-
-        return entityPath;
     }
 
     private async Task SendSequentialAsync(ServiceBusClient client, string entity, IReadOnlyList<ServiceBusMessage> messages, CancellationToken cancellationToken)

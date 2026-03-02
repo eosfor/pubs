@@ -5,22 +5,17 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Get, "SBSubscription", DefaultParameterSetName = ParameterSetByName)]
 [OutputType(typeof(SubscriptionProperties))]
-public sealed class GetSBSubscriptionCommand : PSCmdlet
+public sealed class GetSBSubscriptionCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetByName = "ByName";
     private const string ParameterSetByTopicObject = "ByTopicObject";
 
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(ParameterSetName = ParameterSetByName, Mandatory = true, Position = 0, ValueFromPipelineByPropertyName = true)]
+    [Parameter(ParameterSetName = ParameterSetByName, Position = 0, ValueFromPipelineByPropertyName = true)]
     [Alias("TopicName", "Name")]
     public string Topic { get; set; } = string.Empty;
 
@@ -43,31 +38,35 @@ public sealed class GetSBSubscriptionCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "GetSBSubscriptionFailed", ErrorCategory.NotSpecified, Subscription ?? Topic ?? (object?)InputObject ?? ServiceBusConnectionString));
         }
     }
 
     private async Task<IReadOnlyList<object>> GetSubscriptionsAsync()
     {
-        var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-        var topicName = ResolveTopicName();
+        var connectionString = ResolveConnectionString();
+        var admin = CreateAdminClient(connectionString);
+        var (topicName, resolvedSubscription, _) = ResolveTopicWithOptionalSubscription(
+            ResolveTopicName(),
+            Subscription,
+            resolvedConnectionString: connectionString);
         var results = new List<object>();
 
-        if (string.IsNullOrWhiteSpace(topicName))
+        if (!string.IsNullOrWhiteSpace(resolvedSubscription))
         {
-            throw new InvalidOperationException("Topic name is required to list subscriptions.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(Subscription))
-        {
-            var single = await ReadSingleSubscriptionAsync(admin, topicName, Subscription!);
+            var single = await ReadSingleSubscriptionAsync(admin, topicName, resolvedSubscription!, connectionString);
             results.Add(single);
             return results;
         }
 
         await foreach (var sub in admin.GetSubscriptionsAsync(topicName))
         {
-            var runtime = await TryGetRuntimeAsync(admin, topicName, sub.SubscriptionName);
+            var runtime = await TryGetRuntimeAsync(admin, topicName, sub.SubscriptionName, connectionString);
             results.Add(BuildSubscriptionObject(sub, runtime));
         }
         return results;
@@ -83,7 +82,7 @@ public sealed class GetSBSubscriptionCommand : PSCmdlet
         return Topic;
     }
 
-    private async Task<object> ReadSingleSubscriptionAsync(ServiceBusAdministrationClient admin, string topicName, string subscriptionName)
+    private async Task<object> ReadSingleSubscriptionAsync(ServiceBusAdministrationClient admin, string topicName, string subscriptionName, string connectionString)
     {
         SubscriptionProperties subscription;
         try
@@ -96,18 +95,18 @@ public sealed class GetSBSubscriptionCommand : PSCmdlet
             return new object();
         }
 
-        var runtime = await TryGetRuntimeAsync(admin, topicName, subscriptionName);
+        var runtime = await TryGetRuntimeAsync(admin, topicName, subscriptionName, connectionString);
         return BuildSubscriptionObject(subscription, runtime);
     }
 
-    private async Task<SubscriptionRuntimeProperties?> TryGetRuntimeAsync(ServiceBusAdministrationClient admin, string topicName, string subscriptionName)
+    private async Task<SubscriptionRuntimeProperties?> TryGetRuntimeAsync(ServiceBusAdministrationClient admin, string topicName, string subscriptionName, string connectionString)
     {
         try
         {
             var runtime = (await admin.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName)).Value;
             if (runtime.ActiveMessageCount == 0)
             {
-                var active = await TryPeekActiveCountAsync(topicName, subscriptionName);
+                var active = await TryPeekActiveCountAsync(topicName, subscriptionName, connectionString);
                 if (active > 0)
                 {
                     SetRuntimeCounts(runtime, active);
@@ -122,16 +121,20 @@ public sealed class GetSBSubscriptionCommand : PSCmdlet
         }
     }
 
-    private async Task<int> TryPeekActiveCountAsync(string topicName, string subscriptionName)
+    private async Task<int> TryPeekActiveCountAsync(string topicName, string subscriptionName, string connectionString)
     {
         try
         {
-            await using var client = new ServiceBusClient(ServiceBusConnectionString);
+            await using var client = CreateServiceBusClient(connectionString);
             await using var receiver = client.CreateReceiver(topicName, subscriptionName);
             var peeked = await receiver.PeekMessagesAsync(1);
             return peeked.Count;
         }
-        catch
+        catch (ServiceBusException)
+        {
+            return 0;
+        }
+        catch (InvalidOperationException)
         {
             return 0;
         }

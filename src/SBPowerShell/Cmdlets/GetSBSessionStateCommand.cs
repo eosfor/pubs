@@ -9,7 +9,7 @@ using SBPowerShell.Models;
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Get, "SBSessionState", DefaultParameterSetName = ParameterSetQueue)]
-public sealed class GetSBSessionStateCommand : PSCmdlet
+public sealed class GetSBSessionStateCommand : SBSessionAwareCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
@@ -18,25 +18,21 @@ public sealed class GetSBSessionStateCommand : PSCmdlet
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSessionInfo)]
-    [Parameter(ParameterSetName = ParameterSetContext)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string SessionId { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -61,6 +57,11 @@ public sealed class GetSBSessionStateCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "GetSBSessionStateFailed", ErrorCategory.NotSpecified, ResolveErrorTarget()));
         }
     }
@@ -74,30 +75,47 @@ public sealed class GetSBSessionStateCommand : PSCmdlet
                 throw new ArgumentException("SessionContext is required for the Context parameter set.");
             }
 
+            EnsureSessionContextTargetMatchesExplicit(SessionContext, Queue, Topic, Subscription);
             receiver = SessionContext.Receiver;
             return new ReceiverScope(null, null);
         }
 
-        if (string.IsNullOrWhiteSpace(ServiceBusConnectionString))
-        {
-            throw new ArgumentException("ServiceBusConnectionString is required when SessionContext is not provided.");
-        }
-
-        var client = new ServiceBusClient(ServiceBusConnectionString);
-        receiver = CreateReceiver(client, ct);
+        var connectionString = ResolveConnectionString();
+        var client = CreateServiceBusClient(connectionString);
+        receiver = CreateReceiver(client, connectionString, ct);
         return new ReceiverScope(client, receiver);
     }
 
-    private ServiceBusSessionReceiver CreateReceiver(ServiceBusClient client, CancellationToken ct)
+    private ServiceBusSessionReceiver CreateReceiver(ServiceBusClient client, string connectionString, CancellationToken ct)
     {
         if (ParameterSetName == ParameterSetQueue)
         {
-            return client.AcceptSessionAsync(Queue, SessionId, cancellationToken: ct).GetAwaiter().GetResult();
+            var target = ResolveQueueOrSubscriptionTarget(
+                Queue,
+                Topic,
+                Subscription,
+                resolvedConnectionString: connectionString);
+            if (target.Kind != ResolvedEntityKind.Queue)
+            {
+                throw new ArgumentException("Queue target is required for Queue parameter set.");
+            }
+
+            return client.AcceptSessionAsync(target.Queue, SessionId, cancellationToken: ct).GetAwaiter().GetResult();
         }
 
         if (ParameterSetName == ParameterSetSubscription)
         {
-            return client.AcceptSessionAsync(Topic, Subscription, SessionId, cancellationToken: ct).GetAwaiter().GetResult();
+            var target = ResolveQueueOrSubscriptionTarget(
+                Queue,
+                Topic,
+                Subscription,
+                resolvedConnectionString: connectionString);
+            if (target.Kind != ResolvedEntityKind.Subscription)
+            {
+                throw new ArgumentException("Topic and Subscription are required for Subscription parameter set.");
+            }
+
+            return client.AcceptSessionAsync(target.Topic, target.Subscription, SessionId, cancellationToken: ct).GetAwaiter().GetResult();
         }
 
         var sessionInfo = InputObject ?? throw new ArgumentException("Pipeline input session info is required.");

@@ -90,7 +90,21 @@ public sealed class ClearSBSubscriptionCommand : PSCmdlet
     {
         while (true)
         {
-            var messages = await receiver.ReceiveMessagesAsync(BatchSize, TimeSpan.FromSeconds(WaitSeconds));
+            IReadOnlyList<ServiceBusReceivedMessage> messages;
+            try
+            {
+                messages = await receiver.ReceiveMessagesAsync(BatchSize, TimeSpan.FromSeconds(WaitSeconds));
+            }
+            catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.SessionLockLost)
+            {
+                return;
+            }
+            catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.ServiceCommunicationProblem)
+            {
+                // Connection reset while draining; treat as best-effort completion.
+                return;
+            }
+
             if (messages.Count == 0)
             {
                 break;
@@ -98,7 +112,18 @@ public sealed class ClearSBSubscriptionCommand : PSCmdlet
 
             foreach (var message in messages)
             {
-                await receiver.CompleteMessageAsync(message);
+                try
+                {
+                    await receiver.CompleteMessageAsync(message);
+                }
+                catch (ServiceBusException ex) when (
+                    ex.Reason == ServiceBusFailureReason.MessageLockLost ||
+                    ex.Reason == ServiceBusFailureReason.SessionLockLost ||
+                    ex.Reason == ServiceBusFailureReason.ServiceCommunicationProblem)
+                {
+                    // Best-effort drain for lock-based entities.
+                    return;
+                }
             }
         }
     }
