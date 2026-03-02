@@ -69,10 +69,7 @@ Receive-SBMessage [-BatchSize <Int32>] -WaitSeconds <Int32> [-Peek] [-NoComplete
 ```
 
 ## DESCRIPTION
-Receives data-plane messages from Service Bus queues and subscriptions.
-Use `-MaxMessages` for count-limited receive, `-WaitSeconds` for deadline-based receive, or no limit switches for continuous polling until cancellation.
-In `-WaitSeconds` mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline.
-For session-enabled entities, the command automatically uses a session receiver or accepts `-SessionContext` to continue an opened session.
+Receives data-plane messages from Service Bus queues and subscriptions. Use -MaxMessages for count-limited receive, -WaitSeconds for deadline-based receive, or no limit switches for continuous polling until cancellation. In -WaitSeconds mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline. For session-enabled entities, the command automatically uses a session receiver or accepts -SessionContext to continue an opened session.
 
 ## EXAMPLES
 
@@ -81,14 +78,14 @@ For session-enabled entities, the command automatically uses a session receiver 
 PS C:\\> Receive-SBMessage -SessionContext <SessionContext>
 ```
 
-Receives from an already opened session context until cancelled.
+Runs Receive-SBMessage using the 'Context' parameter set.
 
 ### Example 2 (ContextMax)
 ```powershell
 PS C:\\> Receive-SBMessage -MaxMessages 10 -SessionContext <SessionContext>
 ```
 
-Receives up to 10 messages from the session context and then stops.
+Runs Receive-SBMessage using the 'ContextMax' parameter set.
 
 
 ## PARAMETERS
@@ -230,7 +227,6 @@ Accept wildcard characters: False
 
 ### -WaitSeconds
 Deadline (in seconds) for bounded polling mode. Returns empty when no messages arrive before the deadline.
-
 ```yaml
 Type: Int32
 Parameter Sets: QueueWait, SubscriptionWait, ContextWait

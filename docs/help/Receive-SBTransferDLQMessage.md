@@ -51,9 +51,7 @@ Receive-SBTransferDLQMessage [-ServiceBusConnectionString <String>] -Topic <Stri
 ```
 
 ## DESCRIPTION
-Receives messages from transfer dead-letter subqueues for queues and topic subscriptions.
-Use `-MaxMessages` for count-limited receive, `-WaitSeconds` for deadline-based receive, or no limit switches for continuous polling until cancellation.
-In `-WaitSeconds` mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline.
+Receives messages from transfer dead-letter subqueues for queues and topic subscriptions. Use -MaxMessages for count-limited receive, -WaitSeconds for deadline-based receive, or no limit switches for continuous polling until cancellation. In -WaitSeconds mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline.
 
 ## EXAMPLES
 
@@ -62,14 +60,14 @@ In `-WaitSeconds` mode, internal SDK timeout/retry settings are bounded so execu
 PS C:\\> Receive-SBTransferDLQMessage -Queue '<queue-name>'
 ```
 
-Continuously receives messages from the queue transfer dead-letter subqueue until cancelled.
+Runs Receive-SBTransferDLQMessage using the 'Queue' parameter set.
 
 ### Example 2 (QueueMax)
 ```powershell
 PS C:\\> Receive-SBTransferDLQMessage -MaxMessages 10 -Queue '<queue-name>'
 ```
 
-Receives up to 10 messages from the queue transfer dead-letter subqueue and then stops.
+Runs Receive-SBTransferDLQMessage using the 'QueueMax' parameter set.
 
 
 ## PARAMETERS
@@ -196,7 +194,6 @@ Accept wildcard characters: False
 
 ### -WaitSeconds
 Deadline (in seconds) for bounded polling mode. Returns empty when no messages arrive before the deadline.
-
 ```yaml
 Type: Int32
 Parameter Sets: QueueWait, SubscriptionWait

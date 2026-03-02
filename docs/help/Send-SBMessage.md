@@ -35,7 +35,7 @@ Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceive
 
 ## DESCRIPTION
 Use this cmdlet to perform Service Bus management or data-plane tasks for Send-SBMessage.
-The command supports parameter sets: 'Queue', 'Topic'.
+The command supports parameter sets: 'Context', 'Queue', 'Topic'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES
@@ -226,7 +226,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

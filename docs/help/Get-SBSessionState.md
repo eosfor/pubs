@@ -38,7 +38,7 @@ Get-SBSessionState [-ServiceBusConnectionString <String>] [-InputObject <SBSessi
 
 ## DESCRIPTION
 Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSessionState.
-The command supports parameter sets: 'Context', 'Queue', 'Subscription'.
+The command supports parameter sets: 'Context', 'Queue', 'SessionInfo', 'Subscription'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES

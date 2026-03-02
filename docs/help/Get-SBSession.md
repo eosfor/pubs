@@ -33,7 +33,9 @@ Get-SBSession [-ServiceBusConnectionString <String>] -SessionContext <SessionCon
 ```
 
 ## DESCRIPTION
-Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSession. The command supports parameter sets: 'Context', 'Queue', 'Subscription'. Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSession.
+The command supports parameter sets: 'Context', 'Queue', 'Subscription'.
+Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES
 
@@ -64,7 +66,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
