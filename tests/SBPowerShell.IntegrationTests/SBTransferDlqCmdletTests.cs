@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Management.Automation;
 using Azure.Messaging.ServiceBus;
 using Xunit;
 
@@ -42,26 +41,18 @@ public sealed class SBTransferDlqCmdletTests : SBCommandTestBase
             Assert.InRange(swQueue.Elapsed.TotalSeconds, 0, 4);
 
             var swSub = Stopwatch.StartNew();
-            try
+            var subResult = Invoke<ServiceBusReceivedMessage>(ps =>
             {
-                var subResult = Invoke<ServiceBusReceivedMessage>(ps =>
-                {
-                    ps.AddCommand("Receive-SBTransferDLQMessage")
-                        .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
-                        .AddParameter("Topic", topic)
-                        .AddParameter("Subscription", subscription)
-                        .AddParameter("WaitSeconds", 1);
-                });
-                swSub.Stop();
+                ps.AddCommand("Receive-SBTransferDLQMessage")
+                    .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                    .AddParameter("Topic", topic)
+                    .AddParameter("Subscription", subscription)
+                    .AddParameter("WaitSeconds", 1);
+            });
+            swSub.Stop();
 
-                Assert.Empty(subResult);
-                Assert.InRange(swSub.Elapsed.TotalSeconds, 0, 4);
-            }
-            catch (CmdletInvocationException ex) when (ex.Message.Contains("ServiceTimeout", StringComparison.OrdinalIgnoreCase))
-            {
-                // Emulator may not support transfer DLQ receive for subscriptions reliably.
-                return;
-            }
+            Assert.Empty(subResult);
+            Assert.InRange(swSub.Elapsed.TotalSeconds, 0, 8);
         }
         finally
         {

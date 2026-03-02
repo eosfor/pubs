@@ -35,12 +35,12 @@ public class ServiceBusFixture : IAsyncLifetime
         var sasKey = GetEnvValue("SAS_KEY_VALUE") ?? throw new InvalidOperationException("SAS_KEY_VALUE missing in .env");
         ConnectionString = $"Endpoint=sb://{EmulatorHost};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey={sasKey};UseDevelopmentEmulator=true;";
 
-        ModulePath = Path.Combine(AppContext.BaseDirectory, "SBPowerShell.psd1");
+        ModulePath = Path.Combine(AppContext.BaseDirectory, "pubs.psd1");
         if (!File.Exists(ModulePath))
         {
             // fallback to module output in project bin
-            var debugModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Debug", "net8.0", "SBPowerShell.psd1");
-            var releaseModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Release", "net8.0", "SBPowerShell.psd1");
+            var debugModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Debug", "net8.0", "pubs.psd1");
+            var releaseModule = Path.Combine(RepoRoot, "src", "SBPowerShell", "bin", "Release", "net8.0", "pubs.psd1");
             ModulePath = File.Exists(debugModule) ? debugModule : releaseModule;
         }
     }
@@ -673,6 +673,26 @@ public class PowerShellCmdletTests
     }
 
     [Fact]
+    public void ReceiveSBMessage_stops_after_WaitSeconds_when_subscription_empty()
+    {
+        _fixture.ClearSubscription("test-topic", "test-sub");
+
+        using var ps = _fixture.CreateShell();
+        var sw = Stopwatch.StartNew();
+        ps.AddCommand("Receive-SBMessage")
+            .AddParameter("Topic", "test-topic")
+            .AddParameter("Subscription", "test-sub")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("WaitSeconds", 1);
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        sw.Stop();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Empty(result);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0, 4);
+    }
+
+    [Fact]
     public void Sends_and_receives_non_session_queue_messages()
     {
         _fixture.ClearQueue("test-queue");
@@ -725,6 +745,26 @@ public class PowerShellCmdletTests
 
         Assert.Empty(result);
         Assert.InRange(sw.Elapsed.TotalSeconds, 0, 3);
+    }
+
+    [Fact]
+    public void ReceiveSBDLQMessage_stops_after_WaitSeconds_when_subscription_dlq_empty()
+    {
+        _fixture.ClearDlqSubscription("test-topic", "test-sub");
+
+        using var ps = _fixture.CreateShell();
+        var sw = Stopwatch.StartNew();
+        ps.AddCommand("Receive-SBDLQMessage")
+            .AddParameter("Topic", "test-topic")
+            .AddParameter("Subscription", "test-sub")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("WaitSeconds", 1);
+        var result = ps.Invoke<ServiceBusReceivedMessage>();
+        sw.Stop();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.Empty(result);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0, 4);
     }
 
     [Fact]

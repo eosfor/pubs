@@ -1,6 +1,6 @@
 ---
 external help file: SBPowerShell.dll-Help.xml
-Module Name: SBPowerShell
+Module Name: pubs
 online version:
 schema: 2.0.0
 ---

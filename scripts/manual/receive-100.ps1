@@ -30,9 +30,9 @@ function Get-ConnectionString {
 }
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$modulePath = Join-Path $repoRoot 'src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1'
+$modulePath = Join-Path $repoRoot 'src/SBPowerShell/bin/Debug/net8.0/pubs.psd1'
 if (-not (Test-Path $modulePath)) {
-    $modulePath = Join-Path $repoRoot 'src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1'
+    $modulePath = Join-Path $repoRoot 'src/SBPowerShell/bin/Release/net8.0/pubs.psd1'
 }
 
 if (-not (Test-Path $modulePath)) {

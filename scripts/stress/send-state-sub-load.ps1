@@ -9,9 +9,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$module = "src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1"
+$module = "src/SBPowerShell/bin/Debug/net8.0/pubs.psd1"
 if (-not (Test-Path $module)) {
-    $module = "src/SBPowerShell/bin/Release/net8.0/SBPowerShell.psd1"
+    $module = "src/SBPowerShell/bin/Release/net8.0/pubs.psd1"
 }
 Import-Module $module -Force
 

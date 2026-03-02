@@ -3,7 +3,7 @@
     RootModule = 'SBPowerShell.dll'
 
     # Version number of this module.
-    ModuleVersion = '0.1.1'
+    ModuleVersion = '0.1.2'
 
     # ID used to uniquely identify this module.
     GUID = 'c6d9d8f5-6c32-4e3a-8d8d-1d2076df0c3e'

@@ -1,6 +1,6 @@
 ---
 external help file: SBPowerShell.dll-Help.xml
-Module Name: SBPowerShell
+Module Name: pubs
 online version:
 schema: 2.0.0
 ---
@@ -14,25 +14,31 @@ Reads and returns Service Bus SBSessionState operations.
 
 ### Queue (Default)
 ```
-Get-SBSessionState [-ServiceBusConnectionString <String>] -SessionId <String> -Queue <String> [-AsString]
+Get-SBSessionState -ServiceBusConnectionString <String> -SessionId <String> -Queue <String> [-AsString]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
-Get-SBSessionState [-ServiceBusConnectionString <String>] -SessionId <String> -Topic <String>
+Get-SBSessionState -ServiceBusConnectionString <String> -SessionId <String> -Topic <String>
  -Subscription <String> [-AsString] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+```
+
+### SessionInfo
+```
+Get-SBSessionState -ServiceBusConnectionString <String> -InputObject <SBSessionInfo> [-AsString]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
-Get-SBSessionState [-AsString] -SessionContext <SessionContext> [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Get-SBSessionState [-ServiceBusConnectionString <String>] [-InputObject <SBSessionInfo>] [-AsString]
+ -SessionContext <SessionContext> [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
 Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSessionState.
-The command supports parameter sets: 'Context', 'Queue', 'Subscription'.
+The command supports parameter sets: 'Context', 'Queue', 'SessionInfo', 'Subscription'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES
@@ -46,7 +52,7 @@ Runs Get-SBSessionState using the 'Context' parameter set.
 
 ### Example 2 (Queue)
 ```powershell
-PS C:\\> Get-SBSessionState -Queue '<queue-name>' -SessionId '<session-id>'
+PS C:\\> Get-SBSessionState -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>' -SessionId '<session-id>'
 ```
 
 Runs Get-SBSessionState using the 'Queue' parameter set.
@@ -89,7 +95,19 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Queue, Subscription
+Parameter Sets: Queue, Subscription, SessionInfo
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+```yaml
+Type: String
+Parameter Sets: Context
 Aliases:
 
 Required: False
@@ -171,6 +189,33 @@ Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -InputObject
+Specifies the InputObject value for this command.
+
+```yaml
+Type: SBSessionInfo
+Parameter Sets: SessionInfo
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByValue)
+Accept wildcard characters: False
+```
+
+```yaml
+Type: SBSessionInfo
+Parameter Sets: Context
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 

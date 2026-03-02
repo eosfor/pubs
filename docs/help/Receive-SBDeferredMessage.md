@@ -1,6 +1,6 @@
 ---
 external help file: SBPowerShell.dll-Help.xml
-Module Name: SBPowerShell
+Module Name: pubs
 online version:
 schema: 2.0.0
 ---
@@ -14,20 +14,21 @@ Receives Service Bus SBDeferredMessage operations.
 
 ### Queue (Default)
 ```
-Receive-SBDeferredMessage [-ServiceBusConnectionString <String>] -SequenceNumber <Int64[]> [-Queue <String>]
- [-SessionId <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Receive-SBDeferredMessage [-ServiceBusConnectionString <String>] -SequenceNumber <Int64[]> [-ChunkSize <Int32>]
+ [-Queue <String>] [-SessionId <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
-Receive-SBDeferredMessage [-ServiceBusConnectionString <String>] -SequenceNumber <Int64[]> [-Topic <String>]
- [-Subscription <String>] [-SessionId <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Receive-SBDeferredMessage [-ServiceBusConnectionString <String>] -SequenceNumber <Int64[]> [-ChunkSize <Int32>]
+ [-Topic <String>] [-Subscription <String>] [-SessionId <String>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Context
 ```
-Receive-SBDeferredMessage -SequenceNumber <Int64[]> [-SessionId <String>] -SessionContext <SessionContext>
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Receive-SBDeferredMessage -SequenceNumber <Int64[]> [-ChunkSize <Int32>] [-SessionId <String>]
+ -SessionContext <SessionContext> [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -166,6 +167,21 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -ChunkSize
+Specifies the ChunkSize value for this command.
+
+```yaml
+Type: Int32
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

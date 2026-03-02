@@ -5,37 +5,35 @@ online version:
 schema: 2.0.0
 ---
 
-# Set-SBMessage
+# Get-SBSession
 
 ## SYNOPSIS
-Updates Service Bus SBMessage operations.
+Reads and returns Service Bus SBSession operations.
 
 ## SYNTAX
 
-### Queue (Default)
+### Subscription (Default)
 ```
-Set-SBMessage [-ServiceBusConnectionString <String>] -Queue <String> -Message <ServiceBusReceivedMessage[]>
- [-Complete] [-Abandon] [-Defer] [-DeadLetter] [-DeadLetterReason <String>]
- [-DeadLetterErrorDescription <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBSession -ServiceBusConnectionString <String> [-Topic] <String> [-Subscription] <String> [-ActiveOnly]
+ [-LastUpdatedSince <DateTime>] [-OperationTimeoutSec <Int32>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
-### Subscription
+### Queue
 ```
-Set-SBMessage [-ServiceBusConnectionString <String>] -Topic <String> -Subscription <String>
- -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-Defer] [-DeadLetter]
- [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>] [-ProgressAction <ActionPreference>]
+Get-SBSession -ServiceBusConnectionString <String> [-Queue] <String> [-ActiveOnly]
+ [-LastUpdatedSince <DateTime>] [-OperationTimeoutSec <Int32>] [-ProgressAction <ActionPreference>]
  [<CommonParameters>]
 ```
 
 ### Context
 ```
-Set-SBMessage -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-Defer] [-DeadLetter]
- [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>] -SessionContext <SessionContext>
+Get-SBSession [-ServiceBusConnectionString <String>] -SessionContext <SessionContext>
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Use this cmdlet to perform Service Bus management or data-plane tasks for Set-SBMessage.
+Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSession.
 The command supports parameter sets: 'Context', 'Queue', 'Subscription'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
@@ -43,27 +41,27 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ### Example 1 (Context)
 ```powershell
-PS C:\\> Set-SBMessage -Message <PSMessage[]> -SessionContext <SessionContext>
+PS C:\\> Get-SBSession -SessionContext <SessionContext>
 ```
 
-Runs Set-SBMessage using the 'Context' parameter set.
+Runs Get-SBSession using the 'Context' parameter set.
 
 ### Example 2 (Queue)
 ```powershell
-PS C:\\> Set-SBMessage -Message <PSMessage[]> -Queue '<queue-name>'
+PS C:\\> Get-SBSession -ServiceBusConnectionString '<connection-string>' -Queue '<queue-name>'
 ```
 
-Runs Set-SBMessage using the 'Queue' parameter set.
+Runs Get-SBSession using the 'Queue' parameter set.
 
 
 ## PARAMETERS
 
-### -Abandon
-Abandons message(s) and releases the lock.
+### -ActiveOnly
+Specifies the ActiveOnly value for this command.
 
 ```yaml
 Type: SwitchParameter
-Parameter Sets: (All)
+Parameter Sets: Subscription, Queue
 Aliases:
 
 Required: False
@@ -73,42 +71,12 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Complete
-Completes message(s) and removes them from the entity.
+### -LastUpdatedSince
+Specifies the LastUpdatedSince value for this command.
 
 ```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -DeadLetter
-Moves message(s) to dead-letter subqueue.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -DeadLetterErrorDescription
-Detailed dead-letter error description.
-
-```yaml
-Type: String
-Parameter Sets: (All)
+Type: DateTime
+Parameter Sets: Subscription, Queue
 Aliases:
 
 Required: False
@@ -118,48 +86,18 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -DeadLetterReason
-Reason text stored when dead-lettering a message.
+### -OperationTimeoutSec
+Specifies the OperationTimeoutSec value for this command.
 
 ```yaml
-Type: String
-Parameter Sets: (All)
+Type: Int32
+Parameter Sets: Subscription, Queue
 Aliases:
 
 Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Defer
-Defers message(s) for later retrieval by sequence number.
-
-```yaml
-Type: SwitchParameter
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Message
-Message objects to send or process.
-
-```yaml
-Type: ServiceBusReceivedMessage[]
-Parameter Sets: (All)
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
@@ -172,7 +110,7 @@ Parameter Sets: Queue
 Aliases:
 
 Required: True
-Position: Named
+Position: 0
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -183,7 +121,19 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Queue, Subscription
+Parameter Sets: Subscription, Queue
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+```yaml
+Type: String
+Parameter Sets: Context
 Aliases:
 
 Required: False
@@ -217,7 +167,7 @@ Parameter Sets: Subscription
 Aliases:
 
 Required: True
-Position: Named
+Position: 1
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -232,7 +182,7 @@ Parameter Sets: Subscription
 Aliases:
 
 Required: True
-Position: Named
+Position: 0
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
@@ -258,11 +208,10 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## INPUTS
 
-### Azure.Messaging.ServiceBus.ServiceBusReceivedMessage[]
 ### SBPowerShell.Models.SessionContext
 ## OUTPUTS
 
-### System.Object
+### SBPowerShell.Models.SBSessionInfo
 ## NOTES
 
 ## RELATED LINKS

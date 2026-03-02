@@ -1,6 +1,6 @@
 ---
 external help file: SBPowerShell.dll-Help.xml
-Module Name: SBPowerShell
+Module Name: pubs
 online version:
 schema: 2.0.0
 ---
@@ -8,7 +8,7 @@ schema: 2.0.0
 # Receive-SBTransferDLQMessage
 
 ## SYNOPSIS
-Receives Service Bus SBTransferDLQMessage operations.
+Receives messages from Service Bus transfer dead-letter queues (queue transfer DLQ or subscription transfer DLQ).
 
 ## SYNTAX
 
@@ -51,9 +51,7 @@ Receive-SBTransferDLQMessage [-ServiceBusConnectionString <String>] -Topic <Stri
 ```
 
 ## DESCRIPTION
-Use this cmdlet to perform Service Bus management or data-plane tasks for Receive-SBTransferDLQMessage.
-The command supports parameter sets: 'Queue', 'QueueMax', 'QueueWait', 'Subscription', 'SubscriptionMax', 'SubscriptionWait'.
-Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+Receives messages from transfer dead-letter subqueues for queues and topic subscriptions. Use -MaxMessages for count-limited receive, -WaitSeconds for deadline-based receive, or no limit switches for continuous polling until cancellation. In -WaitSeconds mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline.
 
 ## EXAMPLES
 
@@ -195,8 +193,7 @@ Accept wildcard characters: False
 ```
 
 ### -WaitSeconds
-Maximum number of seconds to wait for messages when polling.
-
+Deadline (in seconds) for bounded polling mode. Returns empty when no messages arrive before the deadline.
 ```yaml
 Type: Int32
 Parameter Sets: QueueWait, SubscriptionWait

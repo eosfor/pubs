@@ -11,16 +11,22 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectFullPath = Join-Path $repoRoot $ProjectPath
 $projectDir = Split-Path $projectFullPath -Parent
-$manifestPath = Join-Path $projectDir 'SBPowerShell.psd1'
+$manifestPath = Join-Path $projectDir 'pubs.psd1'
 
 if (-not (Test-Path $projectFullPath)) {
     throw "Project file not found: $projectFullPath"
+}
+
+if (-not (Test-Path $manifestPath)) {
+    throw "Module manifest not found: $manifestPath"
 }
 
 if (-not $Version) {
     $manifestData = Import-PowerShellDataFile -Path $manifestPath
     $Version = $manifestData.ModuleVersion.ToString()
 }
+
+$moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
 
 Write-Host "Building $ProjectPath ($Configuration, $Framework)..."
 dotnet build $projectFullPath -c $Configuration /p:TargetFramework=$Framework | Out-Host
@@ -30,7 +36,7 @@ if (-not (Test-Path (Join-Path $buildDir 'SBPowerShell.dll'))) {
     throw "Build output not found at $buildDir. Ensure the build succeeded."
 }
 
-$targetDir = Join-Path $repoRoot "$OutputDir/SBPowerShell/$Version"
+$targetDir = Join-Path $repoRoot "$OutputDir/$moduleName/$Version"
 if (Test-Path $targetDir) {
     Remove-Item -Path $targetDir -Recurse -Force
 }
@@ -50,7 +56,7 @@ if (Test-Path $localizedHelpDir) {
     Copy-Item -Path $localizedHelpDir -Destination $targetDir -Recurse -Force
 }
 
-Test-ModuleManifest -Path (Join-Path $targetDir 'SBPowerShell.psd1') | Out-Null
+Test-ModuleManifest -Path (Join-Path $targetDir "$moduleName.psd1") | Out-Null
 
 Write-Host "Module packed to $targetDir"
-Write-Host "Import with: Import-Module '$targetDir/SBPowerShell.psd1'"
+Write-Host "Import with: Import-Module '$targetDir/$moduleName.psd1'"

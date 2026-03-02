@@ -1,11 +1,42 @@
 param(
-    [string]$ModuleManifestPath = "./src/SBPowerShell/bin/Debug/net8.0/SBPowerShell.psd1",
+    [string]$ModuleManifestPath = "./src/SBPowerShell/bin/Debug/net8.0/pubs.psd1",
     [string]$OutputFolder = "./docs/help",
     [string]$ExternalHelpOutputPath = "./src/SBPowerShell/bin/Debug/net8.0/en-US"
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$script:SynopsisOverrides = @{
+    "Receive-SBMessage" = "Receives active messages from a queue, topic subscription, or an existing session context."
+    "Receive-SBDLQMessage" = "Receives messages from Service Bus dead-letter queues (queue DLQ or subscription DLQ)."
+    "Receive-SBTransferDLQMessage" = "Receives messages from Service Bus transfer dead-letter queues (queue transfer DLQ or subscription transfer DLQ)."
+}
+
+$script:DescriptionOverrides = @{
+    "Receive-SBMessage" = @(
+        "Receives data-plane messages from Service Bus queues and subscriptions."
+        "Use -MaxMessages for count-limited receive, -WaitSeconds for deadline-based receive, or no limit switches for continuous polling until cancellation."
+        "In -WaitSeconds mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline."
+        "For session-enabled entities, the command automatically uses a session receiver or accepts -SessionContext to continue an opened session."
+    ) -join " "
+    "Receive-SBDLQMessage" = @(
+        "Receives messages from dead-letter subqueues for queues and topic subscriptions."
+        "Use -MaxMessages for count-limited receive, -WaitSeconds for deadline-based receive, or no limit switches for continuous polling until cancellation."
+        "In -WaitSeconds mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline."
+    ) -join " "
+    "Receive-SBTransferDLQMessage" = @(
+        "Receives messages from transfer dead-letter subqueues for queues and topic subscriptions."
+        "Use -MaxMessages for count-limited receive, -WaitSeconds for deadline-based receive, or no limit switches for continuous polling until cancellation."
+        "In -WaitSeconds mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline."
+    ) -join " "
+}
+
+$script:CommandParameterDescriptionOverrides = @{
+    "Receive-SBMessage::WaitSeconds" = "Deadline (in seconds) for bounded polling mode. Returns empty when no messages arrive before the deadline."
+    "Receive-SBDLQMessage::WaitSeconds" = "Deadline (in seconds) for bounded polling mode. Returns empty when no messages arrive before the deadline."
+    "Receive-SBTransferDLQMessage::WaitSeconds" = "Deadline (in seconds) for bounded polling mode. Returns empty when no messages arrive before the deadline."
+}
 
 function Get-ActionText {
     param([string]$Verb)
@@ -30,6 +61,10 @@ function Get-ActionText {
 function Get-SynopsisText {
     param([System.Management.Automation.CommandInfo]$Command)
 
+    if ($script:SynopsisOverrides.ContainsKey($Command.Name)) {
+        return [string]$script:SynopsisOverrides[$Command.Name]
+    }
+
     $parts = $Command.Name.Split('-', 2)
     $verb = $parts[0]
     $noun = $parts[1]
@@ -39,6 +74,10 @@ function Get-SynopsisText {
 
 function Get-DescriptionText {
     param([System.Management.Automation.CommandInfo]$Command)
+
+    if ($script:DescriptionOverrides.ContainsKey($Command.Name)) {
+        return [string]$script:DescriptionOverrides[$Command.Name]
+    }
 
     $setNames = @($Command.ParameterSets | Sort-Object Name | ForEach-Object { "'$($_.Name)'" })
     $setText = if ($setNames.Count -gt 0) { $setNames -join ", " } else { "default" }
@@ -55,6 +94,11 @@ function Get-ParameterDescription {
         [string]$CommandName,
         [string]$ParameterName
     )
+
+    $commandParameterKey = "$CommandName::$ParameterName"
+    if ($script:CommandParameterDescriptionOverrides.ContainsKey($commandParameterKey)) {
+        return [string]$script:CommandParameterDescriptionOverrides[$commandParameterKey]
+    }
 
     $map = @{
         ServiceBusConnectionString = "Connection string for the target Service Bus namespace or emulator."
@@ -232,10 +276,12 @@ function Get-ExampleBlock {
 Import-Module platyPS -Force
 Import-Module $ModuleManifestPath -Force
 
-New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
-New-MarkdownHelp -Module SBPowerShell -OutputFolder $OutputFolder -Force -WithModulePage | Out-Null
+$moduleName = [System.IO.Path]::GetFileNameWithoutExtension((Resolve-Path $ModuleManifestPath).Path)
 
-$commands = Get-Command -Module SBPowerShell | Sort-Object Name
+New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
+New-MarkdownHelp -Module $moduleName -OutputFolder $OutputFolder -Force -WithModulePage | Out-Null
+
+$commands = Get-Command -Module $moduleName | Sort-Object Name
 
 foreach ($command in $commands) {
     $path = Join-Path $OutputFolder ($command.Name + ".md")
@@ -249,27 +295,52 @@ foreach ($command in $commands) {
     $description = Get-DescriptionText -Command $command
     $examples = Get-ExampleBlock -Command $command
 
-    $content = [regex]::Replace($content, "(?ms)(## SYNOPSIS\r?\n)\{\{ Fill in the Synopsis \}\}", "`$1$synopsis")
-    $content = [regex]::Replace($content, "(?ms)(## DESCRIPTION\r?\n)\{\{ Fill in the Description \}\}", "`$1$description")
+    if ($script:SynopsisOverrides.ContainsKey($command.Name)) {
+        $content = [regex]::Replace($content, "(?ms)(## SYNOPSIS\r?\n).*?(?=\r?\n## )", "`$1$synopsis`r`n")
+    }
+    else {
+        $content = [regex]::Replace($content, "(?ms)(## SYNOPSIS\r?\n)\{\{ Fill in the Synopsis \}\}", "`$1$synopsis")
+    }
+
+    if ($script:DescriptionOverrides.ContainsKey($command.Name)) {
+        $content = [regex]::Replace($content, "(?ms)(## DESCRIPTION\r?\n).*?(?=\r?\n## )", "`$1$description`r`n")
+    }
+    else {
+        $content = [regex]::Replace($content, "(?ms)(## DESCRIPTION\r?\n)\{\{ Fill in the Description \}\}", "`$1$description")
+    }
 
     $content = [regex]::Replace($content, "(?ms)## EXAMPLES.*?(?=## PARAMETERS)", "## EXAMPLES`n`n$examples`n`n")
 
     $parameterNames = [regex]::Matches($content, "### -([A-Za-z0-9]+)") | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
     foreach ($parameterName in $parameterNames) {
         $desc = Get-ParameterDescription -CommandName $command.Name -ParameterName $parameterName
-        $placeholder = "{{ Fill $parameterName Description }}"
-        $content = $content.Replace($placeholder, $desc)
+        $commandParameterKey = "$($command.Name)::$parameterName"
+        if ($script:CommandParameterDescriptionOverrides.ContainsKey($commandParameterKey)) {
+            $escaped = [regex]::Escape($parameterName)
+            $pattern = '(?ms)(### -{0}\r?\n)(.*?)(\r?\n```yaml)' -f $escaped
+            $content = [regex]::Replace(
+                $content,
+                $pattern,
+                {
+                    param($match)
+                    return "$($match.Groups[1].Value)$desc$($match.Groups[3].Value)"
+                })
+        }
+        else {
+            $placeholder = "{{ Fill $parameterName Description }}"
+            $content = $content.Replace($placeholder, $desc)
+        }
     }
 
     Set-Content -Path $path -Value $content -NoNewline
 }
 
-$modulePagePath = Join-Path $OutputFolder "SBPowerShell.md"
+$modulePagePath = Join-Path $OutputFolder "$moduleName.md"
 if (Test-Path $modulePagePath) {
     $modulePage = Get-Content -Path $modulePagePath -Raw
     $modulePage = $modulePage.Replace("{{ Update Download Link }}", "https://github.com/eosfor/pubs")
     $modulePage = $modulePage.Replace("{{ Please enter version of help manually (X.X.X.X) format }}", "1.0.0.0")
-    $modulePage = $modulePage.Replace("{{ Fill in the Description }}", "SBPowerShell module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.")
+    $modulePage = $modulePage.Replace("{{ Fill in the Description }}", "$moduleName module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.")
 
     foreach ($command in $commands) {
         $synopsis = Get-SynopsisText -Command $command

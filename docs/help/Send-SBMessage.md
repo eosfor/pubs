@@ -1,6 +1,6 @@
 ---
 external help file: SBPowerShell.dll-Help.xml
-Module Name: SBPowerShell
+Module Name: pubs
 online version:
 schema: 2.0.0
 ---
@@ -15,37 +15,44 @@ Sends Service Bus SBMessage operations.
 ### Topic (Default)
 ```
 Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>]
- -ServiceBusConnectionString <String> -Topic <String> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-ServiceBusConnectionString <String>] -Topic <String> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
+ [-BatchSize <Int32>] [-PassThru] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Queue
 ```
 Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>]
- -ServiceBusConnectionString <String> -Queue <String> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-ServiceBusConnectionString <String>] -Queue <String> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
+ [-BatchSize <Int32>] [-PassThru] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+```
+
+### Context
+```
+Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>] [-Queue <String>]
+ [-Topic <String>] -SessionContext <SessionContext> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
+ [-BatchSize <Int32>] [-PassThru] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
 Use this cmdlet to perform Service Bus management or data-plane tasks for Send-SBMessage.
-The command supports parameter sets: 'Queue', 'Topic'.
+The command supports parameter sets: 'Context', 'Queue', 'Topic'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES
 
-### Example 1 (Queue)
+### Example 1 (Context)
 ```powershell
-PS C:\\> Send-SBMessage -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>'
+PS C:\\> Send-SBMessage -SessionContext <SessionContext>
+```
+
+Runs Send-SBMessage using the 'Context' parameter set.
+
+### Example 2 (Queue)
+```powershell
+PS C:\\> Send-SBMessage -Queue '<queue-name>'
 ```
 
 Runs Send-SBMessage using the 'Queue' parameter set.
-
-### Example 2 (Topic)
-```powershell
-PS C:\\> Send-SBMessage -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>'
-```
-
-Runs Send-SBMessage using the 'Topic' parameter set.
 
 
 ## PARAMETERS
@@ -110,6 +117,18 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+```yaml
+Type: String
+Parameter Sets: Context
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -ReceivedInputObject
 Previously received Service Bus messages passed through the pipeline.
 
@@ -130,10 +149,10 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: (All)
+Parameter Sets: Topic, Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -155,6 +174,18 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+```yaml
+Type: String
+Parameter Sets: Context
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -ProgressAction
 Controls how progress records are handled.
 
@@ -167,6 +198,51 @@ Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -BatchSize
+Maximum number of messages to process in a single receive batch.
+
+```yaml
+Type: Int32
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -PassThru
+Specifies the PassThru value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -SessionContext
+Session context object returned by New-SBSessionContext.
+
+```yaml
+Type: SessionContext
+Parameter Sets: Context
+Aliases:
+
+Required: True
+Position: Named
+Default value: None
+Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
