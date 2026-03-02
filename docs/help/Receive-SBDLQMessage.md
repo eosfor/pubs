@@ -8,7 +8,7 @@ schema: 2.0.0
 # Receive-SBDLQMessage
 
 ## SYNOPSIS
-Receives Service Bus SBDLQMessage operations.
+Receives messages from Service Bus dead-letter queues (queue DLQ or subscription DLQ).
 
 ## SYNTAX
 
@@ -51,9 +51,9 @@ Receive-SBDLQMessage [-ServiceBusConnectionString <String>] -Topic <String> -Sub
 ```
 
 ## DESCRIPTION
-Use this cmdlet to perform Service Bus management or data-plane tasks for Receive-SBDLQMessage.
-The command supports parameter sets: 'Queue', 'QueueMax', 'QueueWait', 'Subscription', 'SubscriptionMax', 'SubscriptionWait'.
-Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+Receives messages from dead-letter subqueues for queues and topic subscriptions.
+Use `-MaxMessages` for count-limited receive, `-WaitSeconds` for deadline-based receive, or no limit switches for continuous polling until cancellation.
+In `-WaitSeconds` mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline.
 
 ## EXAMPLES
 
@@ -62,14 +62,14 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 PS C:\\> Receive-SBDLQMessage -Queue '<queue-name>'
 ```
 
-Runs Receive-SBDLQMessage using the 'Queue' parameter set.
+Continuously receives messages from the queue dead-letter subqueue until cancelled.
 
 ### Example 2 (QueueMax)
 ```powershell
 PS C:\\> Receive-SBDLQMessage -MaxMessages 10 -Queue '<queue-name>'
 ```
 
-Runs Receive-SBDLQMessage using the 'QueueMax' parameter set.
+Receives up to 10 messages from the queue dead-letter subqueue and then stops.
 
 
 ## PARAMETERS
@@ -195,7 +195,7 @@ Accept wildcard characters: False
 ```
 
 ### -WaitSeconds
-Maximum number of seconds to wait for messages when polling.
+Deadline (in seconds) for bounded polling mode. Returns empty when no messages arrive before the deadline.
 
 ```yaml
 Type: Int32

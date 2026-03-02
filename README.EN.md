@@ -70,6 +70,8 @@ Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnec
 ### WaitSeconds Behavior
 - `-MaxMessages` and `-WaitSeconds` are mutually exclusive modes (different parameter sets). Use only one in a single call.
 - `WaitSeconds` sets the upper wait bound for one receive call: if no messages arrive in that window, the command returns an empty collection.
+- For `Receive-SBMessage`, `Receive-SBDLQMessage`, and `Receive-SBTransferDLQMessage`, `WaitSeconds` mode uses bounded SDK timeouts and constrained retries so calls do not stretch to multi-minute waits on empty entities or emulator edge cases.
+- Actual execution time is expected to stay close to `WaitSeconds` (plus small network/initialization overhead).
 - If neither `-MaxMessages` nor `-WaitSeconds` is provided, the command does continuous polling until cancelled (for example `Ctrl+C`).
 - For stream-style processing, call receive in a loop with your own exit logic:
   ```pwsh

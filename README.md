@@ -72,6 +72,8 @@ Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnec
 ### Поведение WaitSeconds
 - `-MaxMessages` и `-WaitSeconds` — взаимоисключающие режимы (разные parameter set); используйте только один из них в одном вызове.
 - `WaitSeconds` задаёт верхнюю границу ожидания для **одного** вызова получения: если за это окно нет сообщений, команда возвращает пустой список.
+- Для `Receive-SBMessage`, `Receive-SBDLQMessage` и `Receive-SBTransferDLQMessage` в `WaitSeconds`-режиме внутренние SDK-таймауты и retries ограничиваются, чтобы вызов не «зависал» на минуты при пустой сущности или особенностях эмулятора.
+- Фактическое время выполнения обычно близко к `WaitSeconds` (с небольшим сетевым/инициализационным overhead).
 - Если не задан ни `-MaxMessages`, ни `-WaitSeconds`, команда выполняет непрерывный polling до отмены (например, `Ctrl+C`).
 - При длительном стриме вызывайте получение в цикле с нужными паузами/условиями:
   ```pwsh

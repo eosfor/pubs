@@ -8,7 +8,7 @@ schema: 2.0.0
 # Receive-SBMessage
 
 ## SYNOPSIS
-Receives Service Bus SBMessage operations.
+Receives active messages from a queue, topic subscription, or an existing session context.
 
 ## SYNTAX
 
@@ -69,9 +69,10 @@ Receive-SBMessage [-BatchSize <Int32>] -WaitSeconds <Int32> [-Peek] [-NoComplete
 ```
 
 ## DESCRIPTION
-Use this cmdlet to perform Service Bus management or data-plane tasks for Receive-SBMessage.
-The command supports parameter sets: 'Context', 'ContextMax', 'ContextWait', 'Queue', 'QueueMax', 'QueueWait', 'Subscription', 'SubscriptionMax', 'SubscriptionWait'.
-Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+Receives data-plane messages from Service Bus queues and subscriptions.
+Use `-MaxMessages` for count-limited receive, `-WaitSeconds` for deadline-based receive, or no limit switches for continuous polling until cancellation.
+In `-WaitSeconds` mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline.
+For session-enabled entities, the command automatically uses a session receiver or accepts `-SessionContext` to continue an opened session.
 
 ## EXAMPLES
 
@@ -80,14 +81,14 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 PS C:\\> Receive-SBMessage -SessionContext <SessionContext>
 ```
 
-Runs Receive-SBMessage using the 'Context' parameter set.
+Receives from an already opened session context until cancelled.
 
 ### Example 2 (ContextMax)
 ```powershell
 PS C:\\> Receive-SBMessage -MaxMessages 10 -SessionContext <SessionContext>
 ```
 
-Runs Receive-SBMessage using the 'ContextMax' parameter set.
+Receives up to 10 messages from the session context and then stops.
 
 
 ## PARAMETERS
@@ -228,7 +229,7 @@ Accept wildcard characters: False
 ```
 
 ### -WaitSeconds
-Maximum number of seconds to wait for messages when polling.
+Deadline (in seconds) for bounded polling mode. Returns empty when no messages arrive before the deadline.
 
 ```yaml
 Type: Int32
