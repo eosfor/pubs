@@ -14,23 +14,26 @@ Updates Service Bus SBMessage operations.
 
 ### Queue (Default)
 ```
-Set-SBMessage [-ServiceBusConnectionString <String>] -Queue <String> -Message <ServiceBusReceivedMessage[]>
- [-Complete] [-Abandon] [-Defer] [-DeadLetter] [-DeadLetterReason <String>]
- [-DeadLetterErrorDescription <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
-```
-
-### Subscription
-```
-Set-SBMessage [-ServiceBusConnectionString <String>] -Topic <String> -Subscription <String>
- -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-Defer] [-DeadLetter]
- [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Set-SBMessage [-Queue <String>] -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-Defer]
+ [-DeadLetter] [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
-Set-SBMessage -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-Defer] [-DeadLetter]
+Set-SBMessage [-Queue <String>] [-Topic <String>] [-Subscription <String>]
+ -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-Defer] [-DeadLetter]
  [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>] -SessionContext <SessionContext>
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
+```
+
+### Subscription
+```
+Set-SBMessage [-Topic <String>] [-Subscription <String>] -Message <ServiceBusReceivedMessage[]> [-Complete]
+ [-Abandon] [-Defer] [-DeadLetter] [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -38,6 +41,7 @@ Set-SBMessage -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-De
 Use this cmdlet to perform Service Bus management or data-plane tasks for Set-SBMessage.
 The command supports parameter sets: 'Context', 'Queue', 'Subscription'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+Resolution priority: explicit parameters -> -SessionContext/-Context -> current SBContext. In SessionContext mode, conflicting explicit target values cause a terminating error.
 
 ## EXAMPLES
 
@@ -50,7 +54,7 @@ Runs Set-SBMessage using the 'Context' parameter set.
 
 ### Example 2 (Queue)
 ```powershell
-PS C:\\> Set-SBMessage -Message <PSMessage[]> -Queue '<queue-name>'
+PS C:\\> Set-SBMessage -Message <PSMessage[]>
 ```
 
 Runs Set-SBMessage using the 'Queue' parameter set.
@@ -168,10 +172,10 @@ Queue name to target.
 
 ```yaml
 Type: String
-Parameter Sets: Queue
+Parameter Sets: Queue, Context
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -183,7 +187,7 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Queue, Subscription
+Parameter Sets: (All)
 Aliases:
 
 Required: False
@@ -213,10 +217,10 @@ Subscription name to target.
 
 ```yaml
 Type: String
-Parameter Sets: Subscription
+Parameter Sets: Context, Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -228,10 +232,10 @@ Topic name to target.
 
 ```yaml
 Type: String
-Parameter Sets: Subscription
+Parameter Sets: Context, Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -245,6 +249,36 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

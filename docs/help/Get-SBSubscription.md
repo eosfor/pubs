@@ -14,13 +14,14 @@ Reads and returns Service Bus SBSubscription operations.
 
 ### ByName (Default)
 ```
-Get-SBSubscription -ServiceBusConnectionString <String> [-Topic] <String> [-Subscription <String>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBSubscription [[-Topic] <String>] [-Subscription <String>] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### ByTopicObject
 ```
-Get-SBSubscription -ServiceBusConnectionString <String> -InputObject <TopicProperties> [-Subscription <String>]
+Get-SBSubscription -InputObject <TopicProperties> [-Subscription <String>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -28,19 +29,13 @@ Get-SBSubscription -ServiceBusConnectionString <String> -InputObject <TopicPrope
 Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSubscription.
 The command supports parameter sets: 'ByName', 'ByTopicObject'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+Resolution priority: explicit parameters -> -Context -> current SBContext. Use -NoContext to disable SBContext fallback.
 
 ## EXAMPLES
 
-### Example 1 (ByName)
+### Example 1 (ByTopicObject)
 ```powershell
-PS C:\\> Get-SBSubscription -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>'
-```
-
-Runs Get-SBSubscription using the 'ByName' parameter set.
-
-### Example 2 (ByTopicObject)
-```powershell
-PS C:\\> Get-SBSubscription -InputObject <TopicProperties> -ServiceBusConnectionString '<connection-string>'
+PS C:\\> Get-SBSubscription -InputObject <TopicProperties>
 ```
 
 Runs Get-SBSubscription using the 'ByTopicObject' parameter set.
@@ -71,7 +66,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -101,7 +96,7 @@ Type: String
 Parameter Sets: ByName
 Aliases: TopicName, Name
 
-Required: True
+Required: False
 Position: 0
 Default value: None
 Accept pipeline input: True (ByPropertyName)
@@ -115,6 +110,36 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

@@ -14,78 +14,86 @@ Receives active messages from a queue, topic subscription, or an existing sessio
 
 ### Queue (Default)
 ```
-Receive-SBMessage [-ServiceBusConnectionString <String>] -Queue <String> [-BatchSize <Int32>] [-Peek]
- [-NoComplete] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Receive-SBMessage -Queue <String> [-BatchSize <Int32>] [-Peek] [-NoComplete]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### QueueMax
 ```
-Receive-SBMessage [-ServiceBusConnectionString <String>] -Queue <String> -MaxMessages <Int32>
- [-BatchSize <Int32>] [-Peek] [-NoComplete] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Receive-SBMessage -Queue <String> -MaxMessages <Int32> [-BatchSize <Int32>] [-Peek] [-NoComplete]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### QueueWait
 ```
-Receive-SBMessage [-ServiceBusConnectionString <String>] -Queue <String> [-BatchSize <Int32>]
- -WaitSeconds <Int32> [-Peek] [-NoComplete] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Receive-SBMessage -Queue <String> [-BatchSize <Int32>] -WaitSeconds <Int32> [-Peek] [-NoComplete]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
-Receive-SBMessage [-ServiceBusConnectionString <String>] -Topic <String> -Subscription <String>
- [-BatchSize <Int32>] [-Peek] [-NoComplete] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Receive-SBMessage -Topic <String> -Subscription <String> [-BatchSize <Int32>] [-Peek] [-NoComplete]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### SubscriptionMax
 ```
-Receive-SBMessage [-ServiceBusConnectionString <String>] -Topic <String> -Subscription <String>
- -MaxMessages <Int32> [-BatchSize <Int32>] [-Peek] [-NoComplete] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Receive-SBMessage -Topic <String> -Subscription <String> -MaxMessages <Int32> [-BatchSize <Int32>] [-Peek]
+ [-NoComplete] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### SubscriptionWait
 ```
-Receive-SBMessage [-ServiceBusConnectionString <String>] -Topic <String> -Subscription <String>
- [-BatchSize <Int32>] -WaitSeconds <Int32> [-Peek] [-NoComplete] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Receive-SBMessage -Topic <String> -Subscription <String> [-BatchSize <Int32>] -WaitSeconds <Int32> [-Peek]
+ [-NoComplete] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### ContextMax
 ```
 Receive-SBMessage -MaxMessages <Int32> [-BatchSize <Int32>] [-Peek] [-NoComplete]
- -SessionContext <SessionContext> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-SessionContext <SessionContext>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
-Receive-SBMessage [-BatchSize <Int32>] [-Peek] [-NoComplete] -SessionContext <SessionContext>
+Receive-SBMessage [-BatchSize <Int32>] [-Peek] [-NoComplete] [-SessionContext <SessionContext>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### ContextWait
 ```
 Receive-SBMessage [-BatchSize <Int32>] -WaitSeconds <Int32> [-Peek] [-NoComplete]
- -SessionContext <SessionContext> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-SessionContext <SessionContext>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
 Receives data-plane messages from Service Bus queues and subscriptions. Use -MaxMessages for count-limited receive, -WaitSeconds for deadline-based receive, or no limit switches for continuous polling until cancellation. In -WaitSeconds mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline. For session-enabled entities, the command automatically uses a session receiver or accepts -SessionContext to continue an opened session.
+Resolution priority: explicit parameters -> -SessionContext/-Context -> current SBContext. Use -NoContext to disable SBContext fallback.
 
 ## EXAMPLES
 
-### Example 1 (Context)
+### Example 1 (ContextMax)
 ```powershell
-PS C:\\> Receive-SBMessage -SessionContext <SessionContext>
-```
-
-Runs Receive-SBMessage using the 'Context' parameter set.
-
-### Example 2 (ContextMax)
-```powershell
-PS C:\\> Receive-SBMessage -MaxMessages 10 -SessionContext <SessionContext>
+PS C:\\> Receive-SBMessage -MaxMessages 10
 ```
 
 Runs Receive-SBMessage using the 'ContextMax' parameter set.
+
+### Example 2 (ContextWait)
+```powershell
+PS C:\\> Receive-SBMessage -WaitSeconds 5
+```
+
+Runs Receive-SBMessage using the 'ContextWait' parameter set.
 
 
 ## PARAMETERS
@@ -170,7 +178,7 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Queue, QueueMax, QueueWait, Subscription, SubscriptionMax, SubscriptionWait
+Parameter Sets: (All)
 Aliases:
 
 Required: False
@@ -188,7 +196,7 @@ Type: SessionContext
 Parameter Sets: ContextMax, Context, ContextWait
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: True (ByValue)
@@ -246,6 +254,36 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

@@ -10,7 +10,13 @@ Locale: en-US
 ## Description
 pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
 
+Resolver priority for context-aware cmdlets: explicit parameters, then `-SessionContext`/`-Context`, then current runspace `SBContext` from `Set-SBContext`.
+Use `-NoContext` to disable fallback to the current `SBContext`.
+
 ## pubs Cmdlets
+### [Clear-SBContext](Clear-SBContext.md)
+pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
+
 ### [Clear-SBDLQ](Clear-SBDLQ.md)
 pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
 
@@ -30,6 +36,9 @@ pubs module provides cmdlets for Azure Service Bus messaging, entity administrat
 pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
 
 ### [Get-SBConnectionString](Get-SBConnectionString.md)
+pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
+
+### [Get-SBContext](Get-SBContext.md)
 pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
 
 ### [Get-SBQueue](Get-SBQueue.md)
@@ -120,6 +129,9 @@ pubs module provides cmdlets for Azure Service Bus messaging, entity administrat
 pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
 
 ### [Set-SBAuthorizationRule](Set-SBAuthorizationRule.md)
+pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
+
+### [Set-SBContext](Set-SBContext.md)
 pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
 
 ### [Set-SBEntityStatus](Set-SBEntityStatus.md)

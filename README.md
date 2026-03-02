@@ -14,6 +14,7 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 - `New-SBSessionState` — создаёт типобезопасный объект состояния (DSO) из примитивов.
 - `Get-SBSessionState`, `Set-SBSessionState` — читают/пишут состояние сессии как DSO (BinaryData внутри, JSON под капотом), без PowerShell‑JSON «расплющивания».
 - `New-SBSessionContext`, `Close-SBSessionContext` — открыть и переиспользовать session receiver, чтобы выполнять receive/settle/state в одном lock.
+- `Set-SBContext`, `Get-SBContext`, `Clear-SBContext` — управлять default контекстом (runspace-local) для неявного резолва строки подключения и target сущности.
 - `Clear-SBQueue`, `Clear-SBSubscription` — очистка очереди или подписки пакетами.
 - `Get-SBTopic` — список топиков с метаданными из SDK (`TopicProperties`) и runtime-информацией.
 - `Get-SBSubscription` — список подписок указанного топика с метаданными (`SubscriptionProperties`) и runtime-данными, включая количество сообщений.
@@ -68,6 +69,29 @@ Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnec
 
 - Для топика указывайте `-Topic` при отправке и пару `-Topic` + `-Subscription` при получении. Для очереди достаточно `-Queue`.
 - `-Subscription` требуется только при чтении из топика; для очереди этот параметр не используется.
+
+### SBContext (implicit defaults)
+```pwsh
+$conn = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+
+# connection string и target берутся из текущего SBContext
+Send-SBMessage -Message (New-SBMessage -Body "implicit")
+Receive-SBMessage -MaxMessages 1
+
+# explicit параметры всегда имеют приоритет над контекстом
+Get-SBQueue -Queue "another-queue"
+
+# убрать default context
+Clear-SBContext
+```
+
+Порядок резолва для контекст-aware cmdlet:
+- explicit параметры
+- `-SessionContext` / `-Context`
+- текущий `SBContext` (из `Set-SBContext`)
+
+`-NoContext` отключает fallback на текущий `SBContext` для конкретного вызова.
 
 ### Поведение WaitSeconds
 - `-MaxMessages` и `-WaitSeconds` — взаимоисключающие режимы (разные parameter set); используйте только один из них в одном вызове.

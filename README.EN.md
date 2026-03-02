@@ -12,6 +12,7 @@ PowerShell module for Azure Service Bus and local Service Bus Emulator workflows
 - `New-SBSessionState` - create a strongly typed session state object (DSO) from primitives.
 - `Get-SBSessionState`, `Set-SBSessionState` - read/write session state as DSO (BinaryData transport, JSON under the hood), without PowerShell JSON flattening issues.
 - `New-SBSessionContext`, `Close-SBSessionContext` - open and reuse a session receiver to perform receive/settle/state operations within the same lock.
+- `Set-SBContext`, `Get-SBContext`, `Clear-SBContext` - manage runspace-local default context for implicit connection string and entity target resolution.
 - `Clear-SBQueue`, `Clear-SBSubscription` - clear queue or subscription in batches.
 - `Get-SBTopic` - list topics with SDK metadata (`TopicProperties`) and runtime data.
 - `Get-SBSubscription` - list subscriptions for a topic with metadata (`SubscriptionProperties`) and runtime data, including message counts.
@@ -66,6 +67,29 @@ Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnec
 
 - For topic send, use `-Topic`. For topic read, use both `-Topic` and `-Subscription`. For queue scenarios, `-Queue` is enough.
 - `-Subscription` is only used when receiving from a topic.
+
+### SBContext (implicit defaults)
+```pwsh
+$conn = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+
+# connection string and target are resolved from current SBContext
+Send-SBMessage -Message (New-SBMessage -Body "implicit")
+Receive-SBMessage -MaxMessages 1
+
+# explicit parameters always override context values
+Get-SBQueue -Queue "another-queue"
+
+# clear default context
+Clear-SBContext
+```
+
+Resolution order for context-aware cmdlets:
+- explicit parameters
+- `-SessionContext` / `-Context`
+- current `SBContext` (from `Set-SBContext`)
+
+`-NoContext` disables fallback to current `SBContext` for a single invocation.
 
 ### WaitSeconds Behavior
 - `-MaxMessages` and `-WaitSeconds` are mutually exclusive modes (different parameter sets). Use only one in a single call.

@@ -14,36 +14,30 @@ Reads and returns Service Bus SBQueue operations.
 
 ### All (Default)
 ```
-Get-SBQueue -ServiceBusConnectionString <String> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBQueue [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### ByName
 ```
-Get-SBQueue -ServiceBusConnectionString <String> [[-Queue] <String>] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Get-SBQueue [[-Queue] <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
 Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBQueue.
 The command supports parameter sets: 'All', 'ByName'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
+Resolution priority: explicit parameters -> -Context -> current SBContext. Use -NoContext to disable SBContext fallback.
 
 ## EXAMPLES
 
-### Example 1 (All)
+### Example 1
 ```powershell
-PS C:\\> Get-SBQueue -ServiceBusConnectionString '<connection-string>'
+PS C:\\> Get-SBQueue
 ```
 
-Runs Get-SBQueue using the 'All' parameter set.
-
-### Example 2 (ByName)
-```powershell
-PS C:\\> Get-SBQueue -ServiceBusConnectionString '<connection-string>'
-```
-
-Runs Get-SBQueue using the 'ByName' parameter set.
-
+Runs Get-SBQueue with default parameters.
 
 ## PARAMETERS
 
@@ -70,7 +64,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -84,6 +78,36 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named
