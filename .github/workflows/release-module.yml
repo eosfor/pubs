@@ -11,7 +11,7 @@ on:
       tag:
         description: "Release tag (for example: v0.1.0)"
         required: true
-        default: "v0.1.1"
+        default: "v0.1.2"
       publish_to_gallery:
         description: "Publish module to PowerShell Gallery"
         required: true
