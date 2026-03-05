@@ -14,17 +14,18 @@ Creates Service Bus SBRule operations.
 
 ### Sql (Default)
 ```
-New-SBRule -ServiceBusConnectionString <String> -Topic <String> -Subscription <String> [-Rule] <String>
- [-SqlFilter <String>] [-SqlAction <String>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
- [<CommonParameters>]
+New-SBRule [-Topic <String>] [-Subscription <String>] [-Rule] <String> [-SqlFilter <String>]
+ [-SqlAction <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Correlation
 ```
-New-SBRule -ServiceBusConnectionString <String> -Topic <String> -Subscription <String> [-Rule] <String>
- [-CorrelationId <String>] [-MessageId <String>] [-To <String>] [-ReplyTo <String>] [-Subject <String>]
- [-SessionId <String>] [-ReplyToSessionId <String>] [-ContentType <String>] [-CorrelationProperty <Hashtable>]
- [-SqlAction <String>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+New-SBRule [-Topic <String>] [-Subscription <String>] [-Rule] <String> [-CorrelationId <String>]
+ [-MessageId <String>] [-To <String>] [-ReplyTo <String>] [-Subject <String>] [-SessionId <String>]
+ [-ReplyToSessionId <String>] [-ContentType <String>] [-CorrelationProperty <Hashtable>] [-SqlAction <String>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -36,14 +37,14 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ### Example 1 (Correlation)
 ```powershell
-PS C:\\> New-SBRule -ServiceBusConnectionString '<connection-string>' -Subscription '<subscription-name>' -Topic '<topic-name>' -Rule '<rule-name>'
+PS C:\\> New-SBRule -Rule '<rule-name>'
 ```
 
 Runs New-SBRule using the 'Correlation' parameter set.
 
 ### Example 2 (Sql)
 ```powershell
-PS C:\\> New-SBRule -ServiceBusConnectionString '<connection-string>' -Subscription '<subscription-name>' -Topic '<topic-name>' -Rule '<rule-name>'
+PS C:\\> New-SBRule -Rule '<rule-name>'
 ```
 
 Runs New-SBRule using the 'Sql' parameter set.
@@ -179,7 +180,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -254,7 +255,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -284,7 +285,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -318,6 +319,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

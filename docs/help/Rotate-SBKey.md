@@ -14,14 +14,16 @@ Rotates Service Bus SBKey operations.
 
 ### Queue
 ```
-Rotate-SBKey -ServiceBusConnectionString <String> -Queue <String> [-Rule] <String> [-KeyType <String>]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Rotate-SBKey [-Queue <String>] [-Rule] <String> [-KeyType <String>] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
 ```
 
 ### Topic
 ```
-Rotate-SBKey -ServiceBusConnectionString <String> -Topic <String> [-Rule] <String> [-KeyType <String>]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+Rotate-SBKey [-Topic <String>] [-Rule] <String> [-KeyType <String>] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -33,14 +35,14 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ### Example 1 (Queue)
 ```powershell
-PS C:\\> Rotate-SBKey -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>' -Rule '<rule-name>'
+PS C:\\> Rotate-SBKey -Rule '<rule-name>'
 ```
 
 Runs Rotate-SBKey using the 'Queue' parameter set.
 
 ### Example 2 (Topic)
 ```powershell
-PS C:\\> Rotate-SBKey -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>' -Rule '<rule-name>'
+PS C:\\> Rotate-SBKey -Rule '<rule-name>'
 ```
 
 Runs Rotate-SBKey using the 'Topic' parameter set.
@@ -87,7 +89,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -117,7 +119,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -132,7 +134,7 @@ Type: String
 Parameter Sets: Topic
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -166,6 +168,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

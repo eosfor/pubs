@@ -28,7 +28,6 @@ Get-SBQueue [[-Queue] <String>] [-ServiceBusConnectionString <String>] [-Context
 Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBQueue.
 The command supports parameter sets: 'All', 'ByName'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
-Resolution priority: explicit parameters -> -Context -> current SBContext. Use -NoContext to disable SBContext fallback.
 
 ## EXAMPLES
 
@@ -111,7 +110,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

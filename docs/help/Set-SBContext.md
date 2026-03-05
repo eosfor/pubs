@@ -37,7 +37,9 @@ Set-SBContext -InputObject <SBContext> [-Strict] [-NoClobber] [-PassThru] [-Prog
 ```
 
 ## DESCRIPTION
-Creates or updates runspace-local default SBContext used by context-aware cmdlets. Use Namespace mode for connection-only defaults, Queue mode for queue target defaults, Subscription mode for topic/subscription defaults, or pass a full SBContext object via -InputObject.
+Use this cmdlet to perform Service Bus management or data-plane tasks for Set-SBContext.
+The command supports parameter sets: 'FromObject', 'Namespace', 'Queue', 'Subscription'.
+Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES
 
@@ -83,7 +85,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -98,7 +100,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -155,7 +157,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

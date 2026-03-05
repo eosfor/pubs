@@ -14,14 +14,16 @@ Clears Service Bus SBDLQ operations.
 
 ### Queue
 ```
-Clear-SBDLQ -ServiceBusConnectionString <String> -Queue <String> [-TransferDeadLetter] [-BatchSize <Int32>]
- [-WaitSeconds <Int32>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Clear-SBDLQ [-Queue <String>] [-TransferDeadLetter] [-BatchSize <Int32>] [-WaitSeconds <Int32>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
-Clear-SBDLQ -ServiceBusConnectionString <String> -Topic <String> -Subscription <String> [-TransferDeadLetter]
- [-BatchSize <Int32>] [-WaitSeconds <Int32>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Clear-SBDLQ [-Topic <String>] [-Subscription <String>] [-TransferDeadLetter] [-BatchSize <Int32>]
+ [-WaitSeconds <Int32>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -31,20 +33,12 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ## EXAMPLES
 
-### Example 1 (Queue)
+### Example 1
 ```powershell
-PS C:\\> Clear-SBDLQ -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>'
+PS C:\\> Clear-SBDLQ
 ```
 
-Runs Clear-SBDLQ using the 'Queue' parameter set.
-
-### Example 2 (Subscription)
-```powershell
-PS C:\\> Clear-SBDLQ -ServiceBusConnectionString '<connection-string>' -Subscription '<subscription-name>' -Topic '<topic-name>'
-```
-
-Runs Clear-SBDLQ using the 'Subscription' parameter set.
-
+Runs Clear-SBDLQ with default parameters.
 
 ## PARAMETERS
 
@@ -71,7 +65,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -86,7 +80,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -101,7 +95,7 @@ Type: String
 Parameter Sets: Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -116,7 +110,7 @@ Type: String
 Parameter Sets: Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -164,6 +158,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

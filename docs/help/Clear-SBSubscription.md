@@ -13,8 +13,9 @@ Clears Service Bus SBSubscription operations.
 ## SYNTAX
 
 ```
-Clear-SBSubscription -ServiceBusConnectionString <String> -Topic <String> -Subscription <String>
- [-BatchSize <Int32>] [-WaitSeconds <Int32>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Clear-SBSubscription [-Topic <String>] [-Subscription <String>] [-BatchSize <Int32>] [-WaitSeconds <Int32>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -24,13 +25,12 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ## EXAMPLES
 
-### Example 1 (__AllParameterSets)
+### Example 1
 ```powershell
-PS C:\\> Clear-SBSubscription -ServiceBusConnectionString '<connection-string>' -Subscription '<subscription-name>' -Topic '<topic-name>'
+PS C:\\> Clear-SBSubscription
 ```
 
-Runs Clear-SBSubscription using the '__AllParameterSets' parameter set.
-
+Runs Clear-SBSubscription with default parameters.
 
 ## PARAMETERS
 
@@ -57,7 +57,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -72,7 +72,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -87,7 +87,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -120,6 +120,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

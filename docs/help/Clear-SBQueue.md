@@ -22,7 +22,6 @@ Clear-SBQueue [-Queue <String>] [-BatchSize <Int32>] [-WaitSeconds <Int32>]
 Use this cmdlet to perform Service Bus management or data-plane tasks for Clear-SBQueue.
 The command supports parameter sets: '__AllParameterSets'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
-Resolution priority: explicit parameters -> -Context -> current SBContext. Use -NoContext to disable SBContext fallback.
 
 ## EXAMPLES
 
@@ -120,7 +119,7 @@ Aliases: cf
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -150,7 +149,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -166,7 +165,7 @@ Aliases: wi
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

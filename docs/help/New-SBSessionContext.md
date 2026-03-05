@@ -36,7 +36,6 @@ New-SBSessionContext -SessionId <String> -Topic <String> -Subscription <String>
 Use this cmdlet to perform Service Bus management or data-plane tasks for New-SBSessionContext.
 The command supports parameter sets: 'Queue', 'Subscription'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
-Resolution priority for connection and target: explicit parameters -> -Context -> current SBContext. SessionId is always explicit.
 
 ## EXAMPLES
 
@@ -208,7 +207,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

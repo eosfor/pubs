@@ -28,7 +28,9 @@ Get-SBContext [-AsConnectionString] [-ProgressAction <ActionPreference>] [<Commo
 ```
 
 ## DESCRIPTION
-Returns current runspace-local SBContext. Default output is a safe view without secrets; use -Raw for the full object or -AsConnectionString for the raw connection string.
+Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBContext.
+The command supports parameter sets: 'ConnectionString', 'Default', 'Raw'.
+Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES
 
@@ -51,7 +53,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -66,7 +68,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

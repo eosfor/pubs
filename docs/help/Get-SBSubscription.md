@@ -29,7 +29,6 @@ Get-SBSubscription -InputObject <TopicProperties> [-Subscription <String>]
 Use this cmdlet to perform Service Bus management or data-plane tasks for Get-SBSubscription.
 The command supports parameter sets: 'ByName', 'ByTopicObject'.
 Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
-Resolution priority: explicit parameters -> -Context -> current SBContext. Use -NoContext to disable SBContext fallback.
 
 ## EXAMPLES
 
@@ -143,7 +142,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

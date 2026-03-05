@@ -13,8 +13,8 @@ Exports Service Bus SBTopology operations.
 ## SYNTAX
 
 ```
-Export-SBTopology -ServiceBusConnectionString <String> [-Path] <String> [-ProgressAction <ActionPreference>]
- [-WhatIf] [-Confirm] [<CommonParameters>]
+Export-SBTopology [-Path] <String> [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -26,7 +26,7 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ### Example 1 (__AllParameterSets)
 ```powershell
-PS C:\\> Export-SBTopology -ServiceBusConnectionString '<connection-string>' -Path '<path>'
+PS C:\\> Export-SBTopology -Path '<path>'
 ```
 
 Runs Export-SBTopology using the '__AllParameterSets' parameter set.
@@ -72,7 +72,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -106,6 +106,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

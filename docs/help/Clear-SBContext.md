@@ -18,7 +18,9 @@ Clear-SBContext [-Force] [-PassThru] [-ProgressAction <ActionPreference>] [-What
 ```
 
 ## DESCRIPTION
-Clears current runspace-local SBContext. The command supports ShouldProcess (`-WhatIf`/`-Confirm`) and does not close existing SessionContext instances.
+Use this cmdlet to perform Service Bus management or data-plane tasks for Clear-SBContext.
+The command supports parameter sets: '__AllParameterSets'.
+Provide -ServiceBusConnectionString where required and target the appropriate queue, topic, subscription, or rule parameters.
 
 ## EXAMPLES
 
@@ -41,7 +43,7 @@ Aliases: cf
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -56,7 +58,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -71,7 +73,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -87,7 +89,7 @@ Aliases: wi
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

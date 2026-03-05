@@ -13,11 +13,11 @@ Updates Service Bus SBSubscription operations.
 ## SYNTAX
 
 ```
-Set-SBSubscription -ServiceBusConnectionString <String> -Topic <String> [-Subscription] <String>
- [-EnableBatchedOperations <Boolean>] [-DeadLetteringOnMessageExpiration <Boolean>]
- [-EnableDeadLetteringOnFilterEvaluationExceptions <Boolean>] [-MaxDeliveryCount <Int32>]
- [-LockDuration <TimeSpan>] [-DefaultMessageTimeToLive <TimeSpan>] [-AutoDeleteOnIdle <TimeSpan>]
- [-ForwardTo <String>] [-ForwardDeadLetteredMessagesTo <String>] [-UserMetadata <String>]
+Set-SBSubscription [-Topic <String>] [[-Subscription] <String>] [-EnableBatchedOperations <Boolean>]
+ [-DeadLetteringOnMessageExpiration <Boolean>] [-EnableDeadLetteringOnFilterEvaluationExceptions <Boolean>]
+ [-MaxDeliveryCount <Int32>] [-LockDuration <TimeSpan>] [-DefaultMessageTimeToLive <TimeSpan>]
+ [-AutoDeleteOnIdle <TimeSpan>] [-ForwardTo <String>] [-ForwardDeadLetteredMessagesTo <String>]
+ [-UserMetadata <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -28,13 +28,12 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ## EXAMPLES
 
-### Example 1 (__AllParameterSets)
+### Example 1
 ```powershell
-PS C:\\> Set-SBSubscription -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>' -Subscription '<subscription-name>'
+PS C:\\> Set-SBSubscription
 ```
 
-Runs Set-SBSubscription using the '__AllParameterSets' parameter set.
-
+Runs Set-SBSubscription with default parameters.
 
 ## PARAMETERS
 
@@ -196,7 +195,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -211,7 +210,7 @@ Type: String
 Parameter Sets: (All)
 Aliases: SubscriptionName
 
-Required: True
+Required: False
 Position: 0
 Default value: None
 Accept pipeline input: False
@@ -226,7 +225,7 @@ Type: String
 Parameter Sets: (All)
 Aliases: Name, TopicName
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -275,6 +274,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

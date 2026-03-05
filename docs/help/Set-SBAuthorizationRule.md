@@ -14,15 +14,15 @@ Updates Service Bus SBAuthorizationRule operations.
 
 ### Queue
 ```
-Set-SBAuthorizationRule -ServiceBusConnectionString <String> -Queue <String> [-Rule] <String>
- [-Rights <AccessRights[]>] [-PrimaryKey <String>] [-SecondaryKey <String>]
+Set-SBAuthorizationRule [-Queue <String>] [-Rule] <String> [-Rights <AccessRights[]>] [-PrimaryKey <String>]
+ [-SecondaryKey <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Topic
 ```
-Set-SBAuthorizationRule -ServiceBusConnectionString <String> -Topic <String> [-Rule] <String>
- [-Rights <AccessRights[]>] [-PrimaryKey <String>] [-SecondaryKey <String>]
+Set-SBAuthorizationRule [-Topic <String>] [-Rule] <String> [-Rights <AccessRights[]>] [-PrimaryKey <String>]
+ [-SecondaryKey <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -35,14 +35,14 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ### Example 1 (Queue)
 ```powershell
-PS C:\\> Set-SBAuthorizationRule -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>' -Rule '<rule-name>'
+PS C:\\> Set-SBAuthorizationRule -Rule '<rule-name>'
 ```
 
 Runs Set-SBAuthorizationRule using the 'Queue' parameter set.
 
 ### Example 2 (Topic)
 ```powershell
-PS C:\\> Set-SBAuthorizationRule -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>' -Rule '<rule-name>'
+PS C:\\> Set-SBAuthorizationRule -Rule '<rule-name>'
 ```
 
 Runs Set-SBAuthorizationRule using the 'Topic' parameter set.
@@ -88,7 +88,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -149,7 +149,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -164,7 +164,7 @@ Type: String
 Parameter Sets: Topic
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -198,6 +198,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

@@ -77,7 +77,6 @@ Receive-SBMessage [-BatchSize <Int32>] -WaitSeconds <Int32> [-Peek] [-NoComplete
 
 ## DESCRIPTION
 Receives data-plane messages from Service Bus queues and subscriptions. Use -MaxMessages for count-limited receive, -WaitSeconds for deadline-based receive, or no limit switches for continuous polling until cancellation. In -WaitSeconds mode, internal SDK timeout/retry settings are bounded so execution time stays close to the requested deadline. For session-enabled entities, the command automatically uses a session receiver or accepts -SessionContext to continue an opened session.
-Resolution priority: explicit parameters -> -SessionContext/-Context -> current SBContext. Use -NoContext to disable SBContext fallback.
 
 ## EXAMPLES
 
@@ -287,7 +286,7 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: None
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

@@ -14,22 +14,22 @@ Reads and returns Service Bus SBSession operations.
 
 ### Subscription (Default)
 ```
-Get-SBSession -ServiceBusConnectionString <String> [-Topic] <String> [-Subscription] <String> [-ActiveOnly]
- [-LastUpdatedSince <DateTime>] [-OperationTimeoutSec <Int32>] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Get-SBSession [[-Topic] <String>] [[-Subscription] <String>] [-ActiveOnly] [-LastUpdatedSince <DateTime>]
+ [-OperationTimeoutSec <Int32>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Queue
 ```
-Get-SBSession -ServiceBusConnectionString <String> [-Queue] <String> [-ActiveOnly]
- [-LastUpdatedSince <DateTime>] [-OperationTimeoutSec <Int32>] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Get-SBSession [[-Queue] <String>] [-ActiveOnly] [-LastUpdatedSince <DateTime>] [-OperationTimeoutSec <Int32>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
-Get-SBSession [-ServiceBusConnectionString <String>] -SessionContext <SessionContext>
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBSession -SessionContext <SessionContext> [-ServiceBusConnectionString <String>] [-Context <SBContext>]
+ [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -45,13 +45,6 @@ PS C:\\> Get-SBSession -SessionContext <SessionContext>
 ```
 
 Runs Get-SBSession using the 'Context' parameter set.
-
-### Example 2 (Queue)
-```powershell
-PS C:\\> Get-SBSession -ServiceBusConnectionString '<connection-string>' -Queue '<queue-name>'
-```
-
-Runs Get-SBSession using the 'Queue' parameter set.
 
 
 ## PARAMETERS
@@ -109,7 +102,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: 0
 Default value: None
 Accept pipeline input: False
@@ -121,19 +114,7 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Subscription, Queue
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-```yaml
-Type: String
-Parameter Sets: Context
+Parameter Sets: (All)
 Aliases:
 
 Required: False
@@ -166,7 +147,7 @@ Type: String
 Parameter Sets: Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: 1
 Default value: None
 Accept pipeline input: False
@@ -181,7 +162,7 @@ Type: String
 Parameter Sets: Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: 0
 Default value: None
 Accept pipeline input: False
@@ -199,6 +180,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

@@ -93,6 +93,25 @@ Clear-SBContext
 
 `-NoContext` отключает fallback на текущий `SBContext` для конкретного вызова.
 
+Примеры:
+```pwsh
+# 1) Admin-read без явного connection string
+Set-SBContext -ServiceBusConnectionString $conn
+Get-SBTopic
+
+# 2) Data-plane для queue-only контекста
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+Send-SBMessage -Message (New-SBMessage -Body "from-context")
+Receive-SBMessage -MaxMessages 1
+
+# 3) Явный target перекрывает context
+Set-SBContext -ServiceBusConnectionString $conn -Queue "queue-a"
+Get-SBQueue -Queue "queue-b"
+
+# 4) Полностью детерминированный вызов (без fallback на default context)
+Receive-SBMessage -Queue "test-queue" -NoContext -ServiceBusConnectionString $conn -MaxMessages 1
+```
+
 ### Поведение WaitSeconds
 - `-MaxMessages` и `-WaitSeconds` — взаимоисключающие режимы (разные parameter set); используйте только один из них в одном вызове.
 - `WaitSeconds` задаёт верхнюю границу ожидания для **одного** вызова получения: если за это окно нет сообщений, команда возвращает пустой список.

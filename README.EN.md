@@ -91,6 +91,25 @@ Resolution order for context-aware cmdlets:
 
 `-NoContext` disables fallback to current `SBContext` for a single invocation.
 
+Examples:
+```pwsh
+# 1) Admin-read without explicit connection string
+Set-SBContext -ServiceBusConnectionString $conn
+Get-SBTopic
+
+# 2) Data-plane with queue-only context
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+Send-SBMessage -Message (New-SBMessage -Body "from-context")
+Receive-SBMessage -MaxMessages 1
+
+# 3) Explicit target overrides context target
+Set-SBContext -ServiceBusConnectionString $conn -Queue "queue-a"
+Get-SBQueue -Queue "queue-b"
+
+# 4) Fully deterministic call (no fallback to default context)
+Receive-SBMessage -Queue "test-queue" -NoContext -ServiceBusConnectionString $conn -MaxMessages 1
+```
+
 ### WaitSeconds Behavior
 - `-MaxMessages` and `-WaitSeconds` are mutually exclusive modes (different parameter sets). Use only one in a single call.
 - `WaitSeconds` sets the upper wait bound for one receive call: if no messages arrive in that window, the command returns an empty collection.

@@ -15,15 +15,15 @@ Sends Service Bus SBScheduledMessage operations.
 ### Topic (Default)
 ```
 Send-SBScheduledMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>]
- -ServiceBusConnectionString <String> -Topic <String> -ScheduleAtUtc <DateTimeOffset>
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Topic <String>] -ScheduleAtUtc <DateTimeOffset> [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Queue
 ```
 Send-SBScheduledMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>]
- -ServiceBusConnectionString <String> -Queue <String> -ScheduleAtUtc <DateTimeOffset>
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Queue <String>] -ScheduleAtUtc <DateTimeOffset> [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -35,14 +35,14 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ### Example 1 (Queue)
 ```powershell
-PS C:\\> Send-SBScheduledMessage -Queue '<queue-name>' -ScheduleAtUtc (Get-Date).ToUniversalTime().AddMinutes(5) -ServiceBusConnectionString '<connection-string>'
+PS C:\\> Send-SBScheduledMessage -ScheduleAtUtc (Get-Date).ToUniversalTime().AddMinutes(5)
 ```
 
 Runs Send-SBScheduledMessage using the 'Queue' parameter set.
 
 ### Example 2 (Topic)
 ```powershell
-PS C:\\> Send-SBScheduledMessage -ScheduleAtUtc (Get-Date).ToUniversalTime().AddMinutes(5) -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>'
+PS C:\\> Send-SBScheduledMessage -ScheduleAtUtc (Get-Date).ToUniversalTime().AddMinutes(5)
 ```
 
 Runs Send-SBScheduledMessage using the 'Topic' parameter set.
@@ -73,7 +73,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -118,7 +118,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -133,7 +133,7 @@ Type: String
 Parameter Sets: Topic
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -151,6 +151,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

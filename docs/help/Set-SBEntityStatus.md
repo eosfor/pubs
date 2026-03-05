@@ -12,21 +12,9 @@ Updates Service Bus SBEntityStatus operations.
 
 ## SYNTAX
 
-### Queue (Default)
 ```
-Set-SBEntityStatus -ServiceBusConnectionString <String> -Queue <String> -Status <String>
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
-```
-
-### Topic
-```
-Set-SBEntityStatus -ServiceBusConnectionString <String> -Topic <String> -Status <String>
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
-```
-
-### Subscription
-```
-Set-SBEntityStatus -ServiceBusConnectionString <String> -Topic <String> -Subscription <String> -Status <String>
+Set-SBEntityStatus [-Queue <String>] [-Topic <String>] [-Subscription <String>] -Status <String>
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -37,19 +25,12 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ## EXAMPLES
 
-### Example 1 (Queue)
+### Example 1 (__AllParameterSets)
 ```powershell
-PS C:\\> Set-SBEntityStatus -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>' -Status '<status>'
+PS C:\\> Set-SBEntityStatus -Status '<status>'
 ```
 
-Runs Set-SBEntityStatus using the 'Queue' parameter set.
-
-### Example 2 (Subscription)
-```powershell
-PS C:\\> Set-SBEntityStatus -ServiceBusConnectionString '<connection-string>' -Status '<status>' -Subscription '<subscription-name>' -Topic '<topic-name>'
-```
-
-Runs Set-SBEntityStatus using the 'Subscription' parameter set.
+Runs Set-SBEntityStatus using the '__AllParameterSets' parameter set.
 
 
 ## PARAMETERS
@@ -74,10 +55,10 @@ Queue name to target.
 
 ```yaml
 Type: String
-Parameter Sets: Queue
+Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -92,7 +73,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -120,10 +101,10 @@ Subscription name to target.
 
 ```yaml
 Type: String
-Parameter Sets: Subscription
+Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -135,10 +116,10 @@ Topic name to target.
 
 ```yaml
 Type: String
-Parameter Sets: Topic, Subscription
+Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -172,6 +153,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

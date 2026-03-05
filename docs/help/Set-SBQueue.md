@@ -13,13 +13,14 @@ Updates Service Bus SBQueue operations.
 ## SYNTAX
 
 ```
-Set-SBQueue -ServiceBusConnectionString <String> [-Queue] <String> [-EnableBatchedOperations <Boolean>]
+Set-SBQueue [[-Queue] <String>] [-EnableBatchedOperations <Boolean>]
  [-DeadLetteringOnMessageExpiration <Boolean>] [-MaxSizeInMegabytes <Int32>]
  [-MaxMessageSizeInKilobytes <Int32>] [-MaxDeliveryCount <Int32>] [-LockDuration <TimeSpan>]
  [-DefaultMessageTimeToLive <TimeSpan>] [-AutoDeleteOnIdle <TimeSpan>]
  [-DuplicateDetectionHistoryTimeWindow <TimeSpan>] [-ForwardTo <String>]
- [-ForwardDeadLetteredMessagesTo <String>] [-UserMetadata <String>] [-ProgressAction <ActionPreference>]
- [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-ForwardDeadLetteredMessagesTo <String>] [-UserMetadata <String>] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -29,13 +30,12 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ## EXAMPLES
 
-### Example 1 (__AllParameterSets)
+### Example 1
 ```powershell
-PS C:\\> Set-SBQueue -ServiceBusConnectionString '<connection-string>' -Queue '<queue-name>'
+PS C:\\> Set-SBQueue
 ```
 
-Runs Set-SBQueue using the '__AllParameterSets' parameter set.
-
+Runs Set-SBQueue with default parameters.
 
 ## PARAMETERS
 
@@ -227,7 +227,7 @@ Type: String
 Parameter Sets: (All)
 Aliases: Name, QueueName
 
-Required: True
+Required: False
 Position: 0
 Default value: None
 Accept pipeline input: False
@@ -242,7 +242,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -291,6 +291,36 @@ Aliases: proga
 Required: False
 Position: Named
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
