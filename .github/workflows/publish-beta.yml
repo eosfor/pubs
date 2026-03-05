@@ -1,0 +1,263 @@
+name: Publish Beta Module
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to publish (branch, tag, or SHA)"
+        required: true
+        default: "main"
+      base_version:
+        description: "Base stable version X.Y.Z (optional, auto-resolved from latest stable tag)"
+        required: false
+        default: ""
+      prerelease_label:
+        description: "Prerelease label (beta, rc, preview)"
+        required: true
+        default: "beta"
+      prerelease_seq:
+        description: "Prerelease sequence number (optional, defaults to workflow run number)"
+        required: false
+        default: ""
+      publish_to_gallery:
+        description: "Publish prerelease to PowerShell Gallery"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  ACCEPT_EULA: Y
+  SQL_PASSWORD: P@ssword123!
+  SAS_KEY_VALUE: LocalEmulatorKey123!
+  EMULATOR_HTTP_PORT: 5300
+
+jobs:
+  publish-beta:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Set up .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Start Service Bus emulator
+        run: docker compose -f docker-compose.sbus.yml up -d
+
+      - name: Write .env for tests
+        run: |
+          cat > .env <<EOF_ENV
+          SAS_KEY_VALUE=${{ env.SAS_KEY_VALUE }}
+          EMULATOR_HOST=localhost
+          EMULATOR_HTTP_PORT=${{ env.EMULATOR_HTTP_PORT }}
+          EMULATOR_AMQP_PORT=5672
+          EOF_ENV
+
+      - name: Wait for emulator health
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:${EMULATOR_HTTP_PORT}/health >/dev/null 2>&1; then
+              echo "Emulator ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Emulator not ready in time" >&2
+          docker compose -f docker-compose.sbus.yml logs
+          exit 1
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Debug for tests)
+        run: dotnet build --no-restore
+
+      - name: Run integration tests
+        run: dotnet test tests/SBPowerShell.IntegrationTests/SBPowerShell.IntegrationTests.csproj --no-build --verbosity minimal
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: Invoke-Pester -Script tests/SBPowerShell.Tests.ps1 -EnableExit
+
+      - name: Build module (Release/net8.0)
+        run: dotnet build src/SBPowerShell/SBPowerShell.csproj -c Release /p:TargetFramework=net8.0 --no-restore
+
+      - name: Install platyPS
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module platyPS -Scope CurrentUser -Force -AllowClobber
+
+      - name: Generate markdown + external help
+        shell: pwsh
+        run: |
+          ./scripts/help/Generate-PlatyPsHelp.ps1 `
+            -ModuleManifestPath ./src/SBPowerShell/bin/Release/net8.0/pubs.psd1 `
+            -OutputFolder ./docs/help `
+            -ExternalHelpOutputPath ./src/SBPowerShell/bin/Release/net8.0/en-US
+
+      - name: Resolve beta metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $manifestPath = "./src/SBPowerShell/pubs.psd1"
+          $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
+
+          $inputBase = "${{ inputs.base_version }}".Trim()
+          if (-not [string]::IsNullOrWhiteSpace($inputBase)) {
+            $baseVersion = $inputBase
+          } else {
+            $stableTags = @(git tag --list "v*" | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' })
+            if ($stableTags.Count -gt 0) {
+              $sorted = $stableTags | Sort-Object { [version]($_.Substring(1)) }
+              $baseVersion = $sorted[-1].Substring(1)
+            } else {
+              $manifest = Import-PowerShellDataFile -Path $manifestPath
+              $baseVersion = $manifest.ModuleVersion.ToString()
+            }
+          }
+
+          if ($baseVersion -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Invalid base_version '$baseVersion'. Expected semantic version X.Y.Z."
+          }
+
+          $label = "${{ inputs.prerelease_label }}".Trim()
+          if ($label -notmatch '^[A-Za-z][A-Za-z0-9-]*$') {
+            throw "Invalid prerelease_label '$label'. Allowed pattern: ^[A-Za-z][A-Za-z0-9-]*$"
+          }
+
+          $inputSeq = "${{ inputs.prerelease_seq }}".Trim()
+          if (-not [string]::IsNullOrWhiteSpace($inputSeq)) {
+            if ($inputSeq -notmatch '^\d+$') {
+              throw "Invalid prerelease_seq '$inputSeq'. Expected positive integer."
+            }
+            $seq = $inputSeq
+          } else {
+            $seq = "${{ github.run_number }}"
+          }
+
+          $prerelease = "$label.$seq"
+          $fullVersion = "$baseVersion-$prerelease"
+          $tag = "v$fullVersion"
+
+          $repoRoot = (Get-Location).Path
+          $moduleDir = [System.IO.Path]::Combine($repoRoot, "out", $moduleName, $baseVersion)
+          $zipPath = [System.IO.Path]::Combine($repoRoot, "out", "$moduleName.$fullVersion.zip")
+
+          "module_name=$moduleName" >> $env:GITHUB_OUTPUT
+          "base_version=$baseVersion" >> $env:GITHUB_OUTPUT
+          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
+          "full_version=$fullVersion" >> $env:GITHUB_OUTPUT
+          "module_dir=$moduleDir" >> $env:GITHUB_OUTPUT
+          "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Pack module
+        shell: pwsh
+        run: ./scripts/pack-module.ps1 -Configuration Release -Framework net8.0 -Version "${{ steps.meta.outputs.base_version }}"
+
+      - name: Apply prerelease version to staged manifest
+        shell: pwsh
+        run: |
+          $moduleName = "${{ steps.meta.outputs.module_name }}"
+          $moduleDir = "${{ steps.meta.outputs.module_dir }}"
+          $manifestPath = Join-Path $moduleDir "$moduleName.psd1"
+
+          Update-ModuleManifest -Path $manifestPath -ModuleVersion "${{ steps.meta.outputs.base_version }}" -Prerelease "${{ steps.meta.outputs.prerelease }}"
+
+          $manifest = Import-PowerShellDataFile -Path $manifestPath
+          $actualVersion = $manifest.ModuleVersion.ToString()
+          $actualPrerelease = $manifest.PrivateData.PSData.Prerelease
+
+          if ($actualVersion -ne "${{ steps.meta.outputs.base_version }}") {
+            throw "Staged manifest ModuleVersion is '$actualVersion', expected '${{ steps.meta.outputs.base_version }}'."
+          }
+
+          if ($actualPrerelease -ne "${{ steps.meta.outputs.prerelease }}") {
+            throw "Staged manifest Prerelease is '$actualPrerelease', expected '${{ steps.meta.outputs.prerelease }}'."
+          }
+
+      - name: Validate packaged module exports and help
+        shell: pwsh
+        run: |
+          $moduleName = "${{ steps.meta.outputs.module_name }}"
+          $moduleManifestPath = "${{ steps.meta.outputs.module_dir }}/$moduleName.psd1"
+          $manifest = Import-PowerShellDataFile -Path $moduleManifestPath
+          $expectedCmdlets = @($manifest.CmdletsToExport | Sort-Object -Unique)
+
+          Import-Module $moduleManifestPath -Force
+          $actualCmdlets = @(Get-Command -Module $moduleName | Select-Object -ExpandProperty Name | Sort-Object -Unique)
+
+          $missingCmdlets = @($expectedCmdlets | Where-Object { $_ -notin $actualCmdlets })
+          $unexpectedCmdlets = @($actualCmdlets | Where-Object { $_ -notin $expectedCmdlets })
+
+          if ($missingCmdlets.Count -gt 0 -or $unexpectedCmdlets.Count -gt 0) {
+            throw "Cmdlet export mismatch. Missing: $($missingCmdlets -join ', '). Unexpected: $($unexpectedCmdlets -join ', ')."
+          }
+
+          $brokenHelp = [System.Collections.Generic.List[string]]::new()
+          foreach ($cmd in $expectedCmdlets) {
+            $help = Get-Help $cmd -Full
+            $synopsis = [string]$help.Synopsis
+            $description = [string](($help.Description | ForEach-Object Text) -join " ")
+
+            if ([string]::IsNullOrWhiteSpace($synopsis) -or [string]::IsNullOrWhiteSpace($description)) {
+              $brokenHelp.Add($cmd)
+            }
+          }
+
+          if ($brokenHelp.Count -gt 0) {
+            throw "External help is incomplete for: $($brokenHelp -join ', ')"
+          }
+
+      - name: Create release zip
+        run: |
+          cd out
+          zip -r "${{ steps.meta.outputs.module_name }}.${{ steps.meta.outputs.full_version }}.zip" "${{ steps.meta.outputs.module_name }}/${{ steps.meta.outputs.base_version }}"
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.module_name }}-${{ steps.meta.outputs.full_version }}
+          path: ${{ steps.meta.outputs.zip_path }}
+
+      - name: Publish GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ inputs.ref }}
+          name: ${{ steps.meta.outputs.module_name }} ${{ steps.meta.outputs.full_version }}
+          prerelease: true
+          files: ${{ steps.meta.outputs.zip_path }}
+          generate_release_notes: true
+
+      - name: Publish prerelease to PowerShell Gallery
+        if: inputs.publish_to_gallery == true
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PSGALLERY_API_KEY)) {
+            throw "Missing required secret: PSGALLERY_API_KEY"
+          }
+
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Publish-Module `
+            -Path "${{ steps.meta.outputs.module_dir }}" `
+            -Repository PSGallery `
+            -NuGetApiKey $env:PSGALLERY_API_KEY `
+            -Force

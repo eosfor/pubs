@@ -384,17 +384,21 @@ docker compose -f docker-compose.sbus.yml ps        # check status
 - Integration tests are organized per command: one file per command/group (`tests/SBPowerShell.IntegrationTests/SB*Cmdlet*Tests.cs`), shared infrastructure in `SBCommandTestBase`.
 
 ## Release Pipeline
-- Workflow: `.github/workflows/release-module.yml`
+- Workflows:
+  - `.github/workflows/publish-beta.yml`
+  - `.github/workflows/publish-release.yml`
 - Pipeline steps:
-  - builds module (`Release/net8.0`);
-  - generates markdown help and external help XML (`docs/help` + `en-US/SBPowerShell.dll-Help.xml`);
-  - packs module into zip (`out/pubs.<version>.zip`);
-  - publishes zip to GitHub Releases;
-  - publishes module to PowerShell Gallery.
+  - run full quality gate: build + xUnit + Pester + help generation;
+  - pack module into zip (`out/pubs.<version>.zip`);
+  - publish zip to GitHub Releases;
+  - publish module to PowerShell Gallery (optional via `publish_to_gallery`).
 - Triggers:
-  - push to `main` (auto-publish using module version from `pubs.psd1`);
-  - tag push `v*` (for example `v0.1.2`);
-  - manual run (`workflow_dispatch`).
+  - `publish-beta.yml`: manual only (`workflow_dispatch`) with `ref` and auto prerelease versioning (`X.Y.Z-beta.N`);
+  - `publish-release.yml`: stable tag push `vX.Y.Z` or manual run with tag.
+- Versioning (without editing manifest in git):
+  - pipeline updates only the staging manifest in `out/pubs/<version>/pubs.psd1`;
+  - stable: `X.Y.Z`;
+  - beta: `X.Y.Z-beta.N` (install from PSGallery with `-AllowPrerelease`).
 - Required secret:
   - `PSGALLERY_API_KEY` — PowerShell Gallery API key.
 
