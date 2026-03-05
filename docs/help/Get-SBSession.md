@@ -16,20 +16,20 @@ Reads and returns Service Bus SBSession operations.
 ```
 Get-SBSession [[-Topic] <String>] [[-Subscription] <String>] [-ActiveOnly] [-LastUpdatedSince <DateTime>]
  [-OperationTimeoutSec <Int32>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Queue
 ```
 Get-SBSession [[-Queue] <String>] [-ActiveOnly] [-LastUpdatedSince <DateTime>] [-OperationTimeoutSec <Int32>]
- [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
 Get-SBSession -SessionContext <SessionContext> [-ServiceBusConnectionString <String>] [-Context <SBContext>]
- [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -210,6 +210,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

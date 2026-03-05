@@ -90,6 +90,7 @@ Resolution order for context-aware cmdlets:
 - current `SBContext` (from `Set-SBContext`)
 
 `-NoContext` disables fallback to current `SBContext` for a single invocation.
+`-IgnoreCertificateChainErrors` (via `Set-SBContext` or per cmdlet) enables a mode where certificate-chain failures emit detailed warnings and can be accepted.
 
 Examples:
 ```pwsh
@@ -108,6 +109,10 @@ Get-SBQueue -Queue "queue-b"
 
 # 4) Fully deterministic call (no fallback to default context)
 Receive-SBMessage -Queue "test-queue" -NoContext -ServiceBusConnectionString $conn -MaxMessages 1
+
+# 5) Allow invalid chain centrally via SBContext
+Set-SBContext -ServiceBusConnectionString $conn -IgnoreCertificateChainErrors
+Get-SBTopic
 ```
 
 ### WaitSeconds Behavior

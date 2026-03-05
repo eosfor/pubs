@@ -15,25 +15,26 @@ Updates Service Bus SBContext operations.
 ### Namespace
 ```
 Set-SBContext -ServiceBusConnectionString <String> [-Strict] [-NoClobber] [-PassThru]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Queue
 ```
 Set-SBContext [-ServiceBusConnectionString <String>] -Queue <String> [-Strict] [-NoClobber] [-PassThru]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
 Set-SBContext [-ServiceBusConnectionString <String>] -Topic <String> -Subscription <String> [-Strict]
- [-NoClobber] [-PassThru] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-NoClobber] [-PassThru] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### FromObject
 ```
-Set-SBContext -InputObject <SBContext> [-Strict] [-NoClobber] [-PassThru] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Set-SBContext -InputObject <SBContext> [-Strict] [-NoClobber] [-PassThru] [-IgnoreCertificateChainErrors]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -199,6 +200,21 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

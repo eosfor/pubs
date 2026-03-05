@@ -15,13 +15,15 @@ Reads and returns Service Bus SBAuthorizationRule operations.
 ### Queue
 ```
 Get-SBAuthorizationRule [-Queue <String>] [-Rule <String>] [-ServiceBusConnectionString <String>]
- [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Topic
 ```
 Get-SBAuthorizationRule [-Topic <String>] [-Rule <String>] [-ServiceBusConnectionString <String>]
- [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -141,6 +143,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

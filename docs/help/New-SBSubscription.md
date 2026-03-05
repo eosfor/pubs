@@ -18,7 +18,7 @@ New-SBSubscription [-Topic <String>] [[-Subscription] <String>] [-RequiresSessio
  [-EnableDeadLetteringOnFilterEvaluationExceptions <Boolean>] [-MaxDeliveryCount <Int32>]
  [-LockDuration <TimeSpan>] [-DefaultMessageTimeToLive <TimeSpan>] [-AutoDeleteOnIdle <TimeSpan>]
  [-ForwardTo <String>] [-ForwardDeadLetteredMessagesTo <String>] [-UserMetadata <String>] [-SqlFilter <String>]
- [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -335,6 +335,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

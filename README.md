@@ -92,6 +92,7 @@ Clear-SBContext
 - текущий `SBContext` (из `Set-SBContext`)
 
 `-NoContext` отключает fallback на текущий `SBContext` для конкретного вызова.
+`-IgnoreCertificateChainErrors` (в `Set-SBContext` или на конкретном cmdlet) включает режим, где ошибки цепочки сертификата дают warning с деталями, но цепочка может быть принята.
 
 Примеры:
 ```pwsh
@@ -110,6 +111,10 @@ Get-SBQueue -Queue "queue-b"
 
 # 4) Полностью детерминированный вызов (без fallback на default context)
 Receive-SBMessage -Queue "test-queue" -NoContext -ServiceBusConnectionString $conn -MaxMessages 1
+
+# 5) Разрешить invalid chain централизованно через SBContext
+Set-SBContext -ServiceBusConnectionString $conn -IgnoreCertificateChainErrors
+Get-SBTopic
 ```
 
 ### Поведение WaitSeconds

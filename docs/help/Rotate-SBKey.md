@@ -15,15 +15,15 @@ Rotates Service Bus SBKey operations.
 ### Queue
 ```
 Rotate-SBKey [-Queue <String>] [-Rule] <String> [-KeyType <String>] [-ServiceBusConnectionString <String>]
- [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
- [<CommonParameters>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Topic
 ```
 Rotate-SBKey [-Topic <String>] [-Rule] <String> [-KeyType <String>] [-ServiceBusConnectionString <String>]
- [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
- [<CommonParameters>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -198,6 +198,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

@@ -16,7 +16,7 @@ Creates Service Bus SBRule operations.
 ```
 New-SBRule [-Topic <String>] [-Subscription <String>] [-Rule] <String> [-SqlFilter <String>]
  [-SqlAction <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Correlation
@@ -24,7 +24,7 @@ New-SBRule [-Topic <String>] [-Subscription <String>] [-Rule] <String> [-SqlFilt
 New-SBRule [-Topic <String>] [-Subscription <String>] [-Rule] <String> [-CorrelationId <String>]
  [-MessageId <String>] [-To <String>] [-ReplyTo <String>] [-Subject <String>] [-SessionId <String>]
  [-ReplyToSessionId <String>] [-ContentType <String>] [-CorrelationProperty <Hashtable>] [-SqlAction <String>]
- [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -349,6 +349,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

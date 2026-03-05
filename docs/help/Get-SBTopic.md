@@ -15,13 +15,13 @@ Reads and returns Service Bus SBTopic operations.
 ### All (Default)
 ```
 Get-SBTopic [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### ByName
 ```
 Get-SBTopic [[-Topic] <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -111,6 +111,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

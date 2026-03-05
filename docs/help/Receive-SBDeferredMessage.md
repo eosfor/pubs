@@ -16,21 +16,21 @@ Receives Service Bus SBDeferredMessage operations.
 ```
 Receive-SBDeferredMessage -SequenceNumber <Int64[]> [-ChunkSize <Int32>] [-Queue <String>]
  [-SessionId <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
 Receive-SBDeferredMessage -SequenceNumber <Int64[]> [-ChunkSize <Int32>] [-Topic <String>]
  [-Subscription <String>] [-SessionId <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>]
- [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
 Receive-SBDeferredMessage -SequenceNumber <Int64[]> [-ChunkSize <Int32>] [-SessionId <String>]
  -SessionContext <SessionContext> [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -218,6 +218,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

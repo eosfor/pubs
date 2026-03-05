@@ -16,14 +16,16 @@ Sends Service Bus SBScheduledMessage operations.
 ```
 Send-SBScheduledMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>]
  [-Topic <String>] -ScheduleAtUtc <DateTimeOffset> [-ServiceBusConnectionString <String>]
- [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Queue
 ```
 Send-SBScheduledMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>]
  [-Queue <String>] -ScheduleAtUtc <DateTimeOffset> [-ServiceBusConnectionString <String>]
- [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -181,6 +183,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

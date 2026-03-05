@@ -15,13 +15,14 @@ Reads and returns Service Bus SBSessionState operations.
 ### Queue (Default)
 ```
 Get-SBSessionState -SessionId <String> -Queue <String> [-AsString] [-ServiceBusConnectionString <String>]
- [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Subscription
 ```
 Get-SBSessionState -SessionId <String> -Topic <String> -Subscription <String> [-AsString]
- [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -29,13 +30,14 @@ Get-SBSessionState -SessionId <String> -Topic <String> -Subscription <String> [-
 ```
 Get-SBSessionState [-Queue <String>] [-Topic <String>] [-Subscription <String>] [-InputObject <SBSessionInfo>]
  [-AsString] -SessionContext <SessionContext> [-ServiceBusConnectionString <String>] [-Context <SBContext>]
- [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### SessionInfo
 ```
 Get-SBSessionState -InputObject <SBSessionInfo> [-AsString] [-ServiceBusConnectionString <String>]
- [-Context <SBContext>] [-NoContext] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -271,6 +273,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

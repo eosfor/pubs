@@ -16,7 +16,7 @@ Updates Service Bus SBTopic operations.
 Set-SBTopic [[-Topic] <String>] [-EnableBatchedOperations <Boolean>] [-MaxSizeInMegabytes <Int32>]
  [-MaxMessageSizeInKilobytes <Int32>] [-DefaultMessageTimeToLive <TimeSpan>] [-AutoDeleteOnIdle <TimeSpan>]
  [-DuplicateDetectionHistoryTimeWindow <TimeSpan>] [-UserMetadata <String>]
- [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -243,6 +243,21 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
