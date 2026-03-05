@@ -439,7 +439,24 @@ Describe "SBPowerShell cmdlets against emulator" {
         $seed = New-SBMessage -SessionId $sid -Body 'seed'
         Send-SBMessage -Topic 'session-topic' -Message $seed -ServiceBusConnectionString $script:connectionString
 
-        $ctx = New-SBSessionContext -Topic 'session-topic' -Subscription 'session-sub' -SessionId $sid -ServiceBusConnectionString $script:connectionString
+        $ctx = $null
+        $maxAttempts = 5
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+                $ctx = New-SBSessionContext -Topic 'session-topic' -Subscription 'session-sub' -SessionId $sid -ServiceBusConnectionString $script:connectionString
+                break
+            }
+            catch {
+                $msg = [string]$_.Exception.Message
+                $sessionLockConflict = ($msg -match 'SessionCannotBeLocked') -or ($msg -match 'cannot be accepted\. It may be locked by another receiver')
+                if (-not $sessionLockConflict -or $attempt -eq $maxAttempts) {
+                    throw
+                }
+
+                Start-Sleep -Milliseconds (200 * $attempt)
+            }
+        }
+
         try {
             $seedMsg = @(Receive-SBMessage -SessionContext $ctx -MaxMessages 1 -NoComplete)
             $seedMsg.Count | Should -Be 1
