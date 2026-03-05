@@ -21,9 +21,11 @@ if (-not (Test-Path $manifestPath)) {
     throw "Module manifest not found: $manifestPath"
 }
 
+$manifestData = Import-PowerShellDataFile -Path $manifestPath
+$sourceVersion = $manifestData.ModuleVersion.ToString()
+
 if (-not $Version) {
-    $manifestData = Import-PowerShellDataFile -Path $manifestPath
-    $Version = $manifestData.ModuleVersion.ToString()
+    $Version = $sourceVersion
 }
 
 $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
@@ -44,6 +46,18 @@ New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 
 # copy manifest first
 Copy-Item -Path $manifestPath -Destination $targetDir -Force
+$stagedManifestPath = Join-Path $targetDir "$moduleName.psd1"
+
+# Align staged manifest version with requested package version.
+if ($Version -ne $sourceVersion) {
+    $manifestContent = Get-Content -Raw -Path $stagedManifestPath
+    $updatedManifestContent = $manifestContent -replace "(?m)^(\s*ModuleVersion\s*=\s*)'[^']+'", "`$1'$Version'"
+    if ($updatedManifestContent -eq $manifestContent) {
+        throw "Unable to update ModuleVersion in staged manifest: $stagedManifestPath"
+    }
+
+    Set-Content -Path $stagedManifestPath -Value $updatedManifestContent -Encoding UTF8
+}
 
 # copy binaries and dependency payload
 Get-ChildItem -Path $buildDir -File |
@@ -56,7 +70,7 @@ if (Test-Path $localizedHelpDir) {
     Copy-Item -Path $localizedHelpDir -Destination $targetDir -Recurse -Force
 }
 
-Test-ModuleManifest -Path (Join-Path $targetDir "$moduleName.psd1") | Out-Null
+Test-ModuleManifest -Path $stagedManifestPath | Out-Null
 
 Write-Host "Module packed to $targetDir"
 Write-Host "Import with: Import-Module '$targetDir/$moduleName.psd1'"
