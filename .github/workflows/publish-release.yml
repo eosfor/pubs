@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-    tags-ignore:
-      - "v*-*"
   workflow_dispatch:
     inputs:
       ref:
@@ -33,6 +31,7 @@ env:
 
 jobs:
   publish-release:
+    if: github.event_name != 'push' || (startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-'))
     runs-on: ubuntu-latest
 
     steps:

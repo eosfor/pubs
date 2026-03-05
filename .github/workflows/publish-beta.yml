@@ -11,7 +11,7 @@ on:
         required: true
         default: "main"
       base_version:
-        description: "Base stable version X.Y.Z (optional, auto-resolved from latest stable tag)"
+        description: "Base version X.Y.Z for beta (must be greater than latest stable; optional)"
         required: false
         default: ""
       prerelease_label:
@@ -120,6 +120,26 @@ jobs:
           $manifestPath = "./src/SBPowerShell/pubs.psd1"
           $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
           $eventName = "${{ github.event_name }}"
+
+          function Get-LatestStableVersionString {
+            $stableTags = @(git tag --list "v*" | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' })
+            if ($stableTags.Count -eq 0) {
+              return $null
+            }
+
+            $sorted = $stableTags | Sort-Object { [version]($_.Substring(1)) }
+            return $sorted[-1].Substring(1)
+          }
+
+          function Get-NextPatchVersionString {
+            param([Parameter(Mandatory = $true)][string]$VersionString)
+            $v = [version]$VersionString
+            return ([version]::new($v.Major, $v.Minor, $v.Build + 1)).ToString()
+          }
+
+          $latestStable = Get-LatestStableVersionString
+          $latestStableVersion = if ([string]::IsNullOrWhiteSpace($latestStable)) { $null } else { [version]$latestStable }
+
           if ($eventName -eq "push") {
             $tag = "${{ github.ref_name }}"
             if ($tag -notmatch '^v(\d+\.\d+\.\d+)-([A-Za-z][A-Za-z0-9-]*)\.(\d+)$') {
@@ -134,15 +154,17 @@ jobs:
             if ($prereleaseManifest -notmatch '^[A-Za-z0-9]+$') {
               throw "Derived manifest prerelease '$prereleaseManifest' is invalid. Use alphanumeric label for tag '$tag'."
             }
+
+            if ($latestStableVersion -and ([version]$baseVersion -le $latestStableVersion)) {
+              throw "Beta base version '$baseVersion' must be greater than latest stable '$latestStable'. Use tag like v$(Get-NextPatchVersionString -VersionString $latestStable)-beta.N"
+            }
           } else {
             $inputBase = "${{ inputs.base_version }}".Trim()
             if (-not [string]::IsNullOrWhiteSpace($inputBase)) {
               $baseVersion = $inputBase
             } else {
-              $stableTags = @(git tag --list "v*" | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' })
-              if ($stableTags.Count -gt 0) {
-                $sorted = $stableTags | Sort-Object { [version]($_.Substring(1)) }
-                $baseVersion = $sorted[-1].Substring(1)
+              if ($latestStableVersion) {
+                $baseVersion = Get-NextPatchVersionString -VersionString $latestStable
               } else {
                 $manifest = Import-PowerShellDataFile -Path $manifestPath
                 $baseVersion = $manifest.ModuleVersion.ToString()
@@ -151,6 +173,10 @@ jobs:
 
             if ($baseVersion -notmatch '^\d+\.\d+\.\d+$') {
               throw "Invalid base_version '$baseVersion'. Expected semantic version X.Y.Z."
+            }
+
+            if ($latestStableVersion -and ([version]$baseVersion -le $latestStableVersion)) {
+              throw "Invalid base_version '$baseVersion'. It must be greater than latest stable '$latestStable' to avoid folder/version collisions."
             }
 
             $label = "${{ inputs.prerelease_label }}".Trim()

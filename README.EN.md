@@ -52,6 +52,16 @@ Install-Module pubs -Scope CurrentUser
 Import-Module pubs
 ```
 
+Install prerelease from PowerShell Gallery:
+```pwsh
+Install-Module pubs -Scope CurrentUser -AllowPrerelease -RequiredVersion 0.1.3-beta1
+
+# Import-Module -RequiredVersion only accepts System.Version (no prerelease suffix),
+# so import by installed module path:
+$beta = Get-InstalledModule pubs -RequiredVersion 0.1.3-beta1
+Import-Module (Join-Path $beta.InstalledLocation "pubs.psd1") -Force
+```
+
 Send and receive:
 ```pwsh
 $conn = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
@@ -393,12 +403,14 @@ docker compose -f docker-compose.sbus.yml ps        # check status
   - publish zip to GitHub Releases;
   - publish module to PowerShell Gallery (optional via `publish_to_gallery`).
 - Triggers:
-  - `publish-beta.yml`: manual only (`workflow_dispatch`) with `ref` and auto prerelease versioning (`X.Y.Z-beta.N`);
+  - `publish-beta.yml`: beta tag push `vX.Y.Z-beta.N` or manual run (`workflow_dispatch`);
   - `publish-release.yml`: stable tag push `vX.Y.Z` or manual run with tag.
 - Versioning (without editing manifest in git):
   - pipeline updates only the staging manifest in `out/pubs/<version>/pubs.psd1`;
   - stable: `X.Y.Z`;
-  - beta: `X.Y.Z-beta.N` (install from PSGallery with `-AllowPrerelease`).
+  - beta tag: `X.Y.Z-beta.N`, where `X.Y.Z` must be greater than the latest stable version (typically next patch);
+  - beta in PSGallery: `X.Y.Z-betaN` (`Update-ModuleManifest` prerelease limitation: alphanumeric only);
+  - this avoids stable/beta module-folder collisions for the same base `X.Y.Z`.
 - Required secret:
   - `PSGALLERY_API_KEY` — PowerShell Gallery API key.
 
