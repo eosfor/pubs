@@ -4,20 +4,16 @@ using Azure.Messaging.ServiceBus;
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Remove, "SBScheduledMessage", DefaultParameterSetName = ParameterSetQueue, SupportsShouldProcess = true)]
-public sealed class RemoveSBScheduledMessageCommand : PSCmdlet
+public sealed class RemoveSBScheduledMessageCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetTopic = "Topic";
 
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetTopic)]
+    [Parameter(ParameterSetName = ParameterSetTopic)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
@@ -42,15 +38,17 @@ public sealed class RemoveSBScheduledMessageCommand : PSCmdlet
             return;
         }
 
-        var entityPath = ParameterSetName == ParameterSetQueue ? Queue : Topic;
-        if (!ShouldProcess(entityPath, $"Cancel {_numbers.Count} scheduled message(s)"))
+        var connectionString = ResolveConnectionString();
+        var target = ResolveQueueOrTopicTarget(Queue, Topic, resolvedConnectionString: connectionString);
+        var entityPath = target.EntityPath;
+        if (!ShouldProcess($"{(target.Kind == ResolvedEntityKind.Queue ? "Queue" : "Topic")} '{entityPath}' (from {target.Source})", $"Cancel {_numbers.Count} scheduled message(s)"))
         {
             return;
         }
 
         try
         {
-            var client = new ServiceBusClient(ServiceBusConnectionString);
+            var client = CreateServiceBusClient(connectionString);
             try
             {
                 var sender = client.CreateSender(entityPath);
@@ -70,6 +68,11 @@ public sealed class RemoveSBScheduledMessageCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "RemoveSBScheduledMessageFailed", ErrorCategory.NotSpecified, entityPath));
         }
     }

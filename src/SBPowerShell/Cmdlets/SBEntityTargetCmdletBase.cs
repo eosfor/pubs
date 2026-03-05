@@ -83,6 +83,144 @@ public abstract class SBEntityTargetCmdletBase : SBContextAwareCmdletBase
         return null;
     }
 
+    protected ResolvedEntity? TryResolveOptionalTopicTarget(string? explicitTopic, SessionContext? sessionContext = null, string? resolvedConnectionString = null)
+    {
+        var topic = SBContextValidation.Normalize(explicitTopic);
+        if (!string.IsNullOrWhiteSpace(topic))
+        {
+            WriteVerbose($"Resolved target from Explicit parameters: Topic='{topic}'.");
+            WarnOverrideTarget("Topic");
+            return new ResolvedEntity(ResolvedEntityKind.Topic, "explicit", topic: topic);
+        }
+
+        var sessionTarget = ResolveFromSession(sessionContext);
+        if (sessionTarget is not null && sessionTarget.Value.Kind is ResolvedEntityKind.Topic or ResolvedEntityKind.Subscription)
+        {
+            WriteVerbose($"Resolved target from SessionContext: Topic='{sessionTarget.Value.Topic}'.");
+            return new ResolvedEntity(ResolvedEntityKind.Topic, "session", topic: sessionTarget.Value.Topic);
+        }
+
+        var contextTarget = ResolveFromContext();
+        if (contextTarget is not null && contextTarget.Value.Kind is ResolvedEntityKind.Topic or ResolvedEntityKind.Subscription)
+        {
+            WriteVerbose($"Resolved target from SB context: Topic='{contextTarget.Value.Topic}'.");
+            return new ResolvedEntity(ResolvedEntityKind.Topic, "context", topic: contextTarget.Value.Topic);
+        }
+
+        var entityPath = SBContextValidation.TryGetEntityPathFromConnectionString(resolvedConnectionString);
+        if (!string.IsNullOrWhiteSpace(entityPath) &&
+            SBContextValidation.TryParseTopicSubscription(entityPath, out var parsedTopic, out _))
+        {
+            WriteVerbose($"Resolved target from connection string EntityPath: Topic='{parsedTopic}'.");
+            return new ResolvedEntity(ResolvedEntityKind.Topic, "connection-string", topic: parsedTopic);
+        }
+
+        return null;
+    }
+
+    protected ResolvedEntity ResolveTopicTarget(string? explicitTopic, SessionContext? sessionContext = null, string? resolvedConnectionString = null)
+    {
+        var resolved = TryResolveOptionalTopicTarget(explicitTopic, sessionContext, resolvedConnectionString);
+        if (resolved is not null)
+        {
+            return resolved.Value;
+        }
+
+        ThrowResolverError(
+            "MissingEntity",
+            "Target entity is required. Specify -Topic explicitly or set it in SB context.",
+            ErrorCategory.InvalidArgument,
+            this);
+
+        return default;
+    }
+
+    protected ResolvedEntity ResolveSubscriptionTarget(
+        string? explicitTopic,
+        string? explicitSubscription,
+        SessionContext? sessionContext = null,
+        bool sessionContextPriority = false,
+        string? resolvedConnectionString = null)
+    {
+        var resolved = ResolveQueueOrSubscriptionTarget(
+            explicitQueue: null,
+            explicitTopic: explicitTopic,
+            explicitSubscription: explicitSubscription,
+            sessionContext: sessionContext,
+            sessionContextPriority: sessionContextPriority,
+            resolvedConnectionString: resolvedConnectionString);
+
+        if (resolved.Kind == ResolvedEntityKind.Subscription)
+        {
+            return resolved;
+        }
+
+        ThrowResolverError(
+            "MissingEntity",
+            "Target entity is required. Specify -Topic and -Subscription explicitly or set them in SB context.",
+            ErrorCategory.InvalidArgument,
+            this);
+
+        return default;
+    }
+
+    protected ResolvedEntity? TryResolveOptionalSubscriptionTarget(
+        string? explicitTopic,
+        string? explicitSubscription,
+        SessionContext? sessionContext = null,
+        bool sessionContextPriority = false,
+        string? resolvedConnectionString = null)
+    {
+        var topic = SBContextValidation.Normalize(explicitTopic);
+        var subscription = SBContextValidation.Normalize(explicitSubscription);
+
+        if (string.IsNullOrWhiteSpace(topic) && !string.IsNullOrWhiteSpace(subscription))
+        {
+            ThrowResolverError(
+                "InvalidContext",
+                "SB context is invalid: Subscription requires Topic.",
+                ErrorCategory.InvalidArgument,
+                this);
+        }
+
+        if (!string.IsNullOrWhiteSpace(topic) && !string.IsNullOrWhiteSpace(subscription))
+        {
+            WriteVerbose($"Resolved target from Explicit parameters: Topic='{topic}', Subscription='{subscription}'.");
+            WarnOverrideTarget("Topic/Subscription");
+            return new ResolvedEntity(ResolvedEntityKind.Subscription, "explicit", topic: topic, subscription: subscription);
+        }
+
+        var sessionTarget = ResolveFromSession(sessionContext);
+        if (sessionContextPriority && sessionTarget is not null && sessionTarget.Value.Kind == ResolvedEntityKind.Subscription)
+        {
+            WriteVerbose($"Resolved target from SessionContext: Topic='{sessionTarget.Value.Topic}', Subscription='{sessionTarget.Value.Subscription}'.");
+            return sessionTarget.Value;
+        }
+
+        if (sessionTarget is not null && sessionTarget.Value.Kind == ResolvedEntityKind.Subscription)
+        {
+            WriteVerbose($"Resolved target from SessionContext: Topic='{sessionTarget.Value.Topic}', Subscription='{sessionTarget.Value.Subscription}'.");
+            return sessionTarget.Value;
+        }
+
+        var contextTarget = ResolveFromContext();
+        if (contextTarget is not null && contextTarget.Value.Kind == ResolvedEntityKind.Subscription)
+        {
+            WriteVerbose($"Resolved target from SB context: Topic='{contextTarget.Value.Topic}', Subscription='{contextTarget.Value.Subscription}'.");
+            return contextTarget.Value;
+        }
+
+        var entityPath = SBContextValidation.TryGetEntityPathFromConnectionString(resolvedConnectionString);
+        if (!string.IsNullOrWhiteSpace(entityPath) &&
+            SBContextValidation.TryParseTopicSubscription(entityPath, out var parsedTopic, out var parsedSubscription))
+        {
+            WriteVerbose($"Resolved target from connection string EntityPath: Topic='{parsedTopic}', Subscription='{parsedSubscription}'.");
+            return new ResolvedEntity(ResolvedEntityKind.Subscription, "connection-string", topic: parsedTopic, subscription: parsedSubscription);
+        }
+
+        return null;
+    }
+
     protected ResolvedEntity ResolveQueueOrTopicTarget(string? explicitQueue, string? explicitTopic, SessionContext? sessionContext = null, string? resolvedConnectionString = null)
     {
         var queue = SBContextValidation.Normalize(explicitQueue);
@@ -254,6 +392,112 @@ public abstract class SBEntityTargetCmdletBase : SBContextAwareCmdletBase
         return default;
     }
 
+    protected ResolvedEntity ResolveQueueTopicOrSubscriptionTarget(
+        string? explicitQueue,
+        string? explicitTopic,
+        string? explicitSubscription,
+        SessionContext? sessionContext = null,
+        bool sessionContextPriority = false,
+        string? resolvedConnectionString = null)
+    {
+        var queue = SBContextValidation.Normalize(explicitQueue);
+        var topic = SBContextValidation.Normalize(explicitTopic);
+        var subscription = SBContextValidation.Normalize(explicitSubscription);
+
+        if (!string.IsNullOrWhiteSpace(queue) && (!string.IsNullOrWhiteSpace(topic) || !string.IsNullOrWhiteSpace(subscription)))
+        {
+            ThrowResolverError(
+                "AmbiguousEntity",
+                "Target entity is ambiguous. Queue and Topic/Subscription cannot be used together.",
+                ErrorCategory.InvalidArgument,
+                this);
+        }
+
+        if (string.IsNullOrWhiteSpace(topic) && !string.IsNullOrWhiteSpace(subscription))
+        {
+            ThrowResolverError(
+                "InvalidContext",
+                "SB context is invalid: Subscription requires Topic.",
+                ErrorCategory.InvalidArgument,
+                this);
+        }
+
+        var explicitTarget = BuildExplicitTargetIncludingTopic(queue, topic, subscription);
+        var sessionTarget = ResolveFromSession(sessionContext);
+        var contextTarget = ResolveFromContext();
+
+        if (sessionContextPriority && sessionTarget is not null)
+        {
+            if (explicitTarget is not null && !AreSameTarget(explicitTarget.Value, sessionTarget.Value))
+            {
+                ThrowResolverError(
+                    "SessionContextEntityMismatch",
+                    "Provided target conflicts with SessionContext entity.",
+                    ErrorCategory.InvalidArgument,
+                    this);
+            }
+
+            WriteVerbose($"Resolved target from SessionContext: {sessionTarget.Value.EntityPath}.");
+            return sessionTarget.Value;
+        }
+
+        if (explicitTarget is not null)
+        {
+            WriteVerbose(explicitTarget.Value.Kind switch
+            {
+                ResolvedEntityKind.Queue => $"Resolved target from Explicit parameters: Queue='{explicitTarget.Value.Queue}'.",
+                ResolvedEntityKind.Topic => $"Resolved target from Explicit parameters: Topic='{explicitTarget.Value.Topic}'.",
+                _ => $"Resolved target from Explicit parameters: Topic='{explicitTarget.Value.Topic}', Subscription='{explicitTarget.Value.Subscription}'."
+            });
+
+            WarnOverrideTarget(explicitTarget.Value.Kind switch
+            {
+                ResolvedEntityKind.Queue => "Queue",
+                ResolvedEntityKind.Topic => "Topic",
+                _ => "Topic/Subscription"
+            });
+            return explicitTarget.Value;
+        }
+
+        if (sessionTarget is not null)
+        {
+            WriteVerbose($"Resolved target from SessionContext: {sessionTarget.Value.EntityPath}.");
+            return sessionTarget.Value;
+        }
+
+        if (contextTarget is not null)
+        {
+            WriteVerbose(contextTarget.Value.Kind switch
+            {
+                ResolvedEntityKind.Queue => $"Resolved target from SB context: Queue='{contextTarget.Value.Queue}'.",
+                ResolvedEntityKind.Topic => $"Resolved target from SB context: Topic='{contextTarget.Value.Topic}'.",
+                _ => $"Resolved target from SB context: Topic='{contextTarget.Value.Topic}', Subscription='{contextTarget.Value.Subscription}'."
+            });
+            return contextTarget.Value;
+        }
+
+        var entityPath = SBContextValidation.TryGetEntityPathFromConnectionString(resolvedConnectionString);
+        if (!string.IsNullOrWhiteSpace(entityPath))
+        {
+            if (SBContextValidation.TryParseTopicSubscription(entityPath, out var parsedTopic, out var parsedSubscription))
+            {
+                WriteVerbose($"Resolved target from connection string EntityPath: Topic='{parsedTopic}', Subscription='{parsedSubscription}'.");
+                return new ResolvedEntity(ResolvedEntityKind.Subscription, "connection-string", topic: parsedTopic, subscription: parsedSubscription);
+            }
+
+            WriteVerbose($"Resolved target from connection string EntityPath: Queue='{entityPath}'.");
+            return new ResolvedEntity(ResolvedEntityKind.Queue, "connection-string", queue: entityPath);
+        }
+
+        ThrowResolverError(
+            "MissingEntity",
+            "Target entity is required. Specify -Queue or -Topic/-Subscription explicitly or set them in SB context.",
+            ErrorCategory.InvalidArgument,
+            this);
+
+        return default;
+    }
+
     protected (string Topic, string? Subscription, string Source) ResolveTopicWithOptionalSubscription(
         string? explicitTopic,
         string? explicitSubscription,
@@ -376,6 +620,26 @@ public abstract class SBEntityTargetCmdletBase : SBContextAwareCmdletBase
         if (!string.IsNullOrWhiteSpace(topic) && !string.IsNullOrWhiteSpace(subscription))
         {
             return new ResolvedEntity(ResolvedEntityKind.Subscription, "explicit", topic: topic, subscription: subscription);
+        }
+
+        return null;
+    }
+
+    private static ResolvedEntity? BuildExplicitTargetIncludingTopic(string? queue, string? topic, string? subscription)
+    {
+        if (!string.IsNullOrWhiteSpace(queue))
+        {
+            return new ResolvedEntity(ResolvedEntityKind.Queue, "explicit", queue: queue);
+        }
+
+        if (!string.IsNullOrWhiteSpace(topic) && !string.IsNullOrWhiteSpace(subscription))
+        {
+            return new ResolvedEntity(ResolvedEntityKind.Subscription, "explicit", topic: topic, subscription: subscription);
+        }
+
+        if (!string.IsNullOrWhiteSpace(topic))
+        {
+            return new ResolvedEntity(ResolvedEntityKind.Topic, "explicit", topic: topic);
         }
 
         return null;

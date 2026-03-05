@@ -9,16 +9,11 @@ namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommunications.Receive, "SBDeferredMessage", DefaultParameterSetName = ParameterSetQueue)]
 [OutputType(typeof(ServiceBusReceivedMessage))]
-public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
+public sealed class ReceiveSBDeferredMessageCommand : SBSessionAwareCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
     private const string ParameterSetContext = "Context";
-
-    [Parameter(ParameterSetName = ParameterSetQueue)]
-    [Parameter(ParameterSetName = ParameterSetSubscription)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true)]
     [ValidateNotNullOrEmpty]
@@ -58,28 +53,35 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
         {
             if (SessionContext is not null)
             {
+                EnsureSessionContextTargetMatchesExplicit(SessionContext, Queue, Topic, Subscription);
                 ReceiveWithContext();
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(ServiceBusConnectionString))
-                {
-                    throw new ArgumentException("ServiceBusConnectionString is required when SessionContext is not provided.");
-                }
-
-                client = new ServiceBusClient(ServiceBusConnectionString);
+                var connectionString = ResolveConnectionString();
+                var target = ResolveQueueOrSubscriptionTarget(
+                    Queue,
+                    Topic,
+                    Subscription,
+                    resolvedConnectionString: connectionString);
+                client = CreateServiceBusClient(connectionString);
                 if (!string.IsNullOrEmpty(SessionId))
                 {
-                    ReceiveFromSession(client);
+                    ReceiveFromSession(client, target);
                 }
                 else
                 {
-                    ReceiveNonSession(client);
+                    ReceiveNonSession(client, target);
                 }
             }
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ReceiveSBDeferredMessageFailed", ErrorCategory.NotSpecified, this));
         }
         finally
@@ -107,11 +109,11 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveNonSession(ServiceBusClient client)
+    private void ReceiveNonSession(ServiceBusClient client, ResolvedEntity target)
     {
-        var receiver = ParameterSetName == ParameterSetQueue
-            ? client.CreateReceiver(Queue!)
-            : client.CreateReceiver(Topic!, Subscription!);
+        var receiver = target.Kind == ResolvedEntityKind.Queue
+            ? client.CreateReceiver(target.Queue)
+            : client.CreateReceiver(target.Topic, target.Subscription);
 
         try
         {
@@ -133,11 +135,11 @@ public sealed class ReceiveSBDeferredMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveFromSession(ServiceBusClient client)
+    private void ReceiveFromSession(ServiceBusClient client, ResolvedEntity target)
     {
-        var sessionReceiver = ParameterSetName == ParameterSetQueue
-            ? client.AcceptSessionAsync(Queue!, SessionId, cancellationToken: _cts.Token).GetAwaiter().GetResult()
-            : client.AcceptSessionAsync(Topic!, Subscription!, SessionId, cancellationToken: _cts.Token).GetAwaiter().GetResult();
+        var sessionReceiver = target.Kind == ResolvedEntityKind.Queue
+            ? client.AcceptSessionAsync(target.Queue, SessionId, cancellationToken: _cts.Token).GetAwaiter().GetResult()
+            : client.AcceptSessionAsync(target.Topic, target.Subscription, SessionId, cancellationToken: _cts.Token).GetAwaiter().GetResult();
 
         try
         {

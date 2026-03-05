@@ -212,6 +212,28 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
     }
 
     [Fact]
+    public void Resolver_supports_context_only_Get_SBTopic()
+    {
+        using var ps = _fixture.CreateShell();
+
+        ps.AddCommand("Set-SBContext")
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString);
+        ps.Invoke();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        ps.Commands.Clear();
+        ps.AddCommand("Get-SBTopic");
+        var topics = ps.Invoke<PSObject>();
+        ServiceBusFixture.EnsureNoErrors(ps);
+
+        Assert.NotEmpty(topics);
+        Assert.Contains(topics, t =>
+            string.Equals(t.Properties["Name"]?.Value?.ToString(), "test-topic", StringComparison.OrdinalIgnoreCase));
+
+        ClearContext(ps);
+    }
+
+    [Fact]
     public void Explicit_parameters_override_context_target()
     {
         _fixture.ClearQueue("test-queue");

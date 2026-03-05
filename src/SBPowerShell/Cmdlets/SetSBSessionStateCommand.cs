@@ -9,31 +9,26 @@ using SBPowerShell.Models;
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Set, "SBSessionState", DefaultParameterSetName = ParameterSetQueue)]
-public sealed class SetSBSessionStateCommand : PSCmdlet
+public sealed class SetSBSessionStateCommand : SBSessionAwareCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
     private const string ParameterSetContext = "Context";
-
-    [Parameter(ParameterSetName = ParameterSetQueue)]
-    [Parameter(ParameterSetName = ParameterSetSubscription)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string SessionId { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -47,7 +42,6 @@ public sealed class SetSBSessionStateCommand : PSCmdlet
     {
         try
         {
-            EnsureConnectionString();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             using var scope = CreateReceiver(cts.Token, out var receiver);
             using var renewer = SessionLockAutoRenewer.Start(receiver, cts.Token);
@@ -57,15 +51,12 @@ public sealed class SetSBSessionStateCommand : PSCmdlet
         }
         catch (Exception ex)
         {
-            ThrowTerminatingError(new ErrorRecord(ex, "SetSBSessionStateFailed", ErrorCategory.NotSpecified, this));
-        }
-    }
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
 
-    private void EnsureConnectionString()
-    {
-        if (SessionContext is null && string.IsNullOrWhiteSpace(ServiceBusConnectionString))
-        {
-            throw new ArgumentException("ServiceBusConnectionString is required when SessionContext is not provided.");
+            ThrowTerminatingError(new ErrorRecord(ex, "SetSBSessionStateFailed", ErrorCategory.NotSpecified, this));
         }
     }
 
@@ -73,14 +64,21 @@ public sealed class SetSBSessionStateCommand : PSCmdlet
     {
         if (SessionContext is not null)
         {
+            EnsureSessionContextTargetMatchesExplicit(SessionContext, Queue, Topic, Subscription);
             receiver = SessionContext.Receiver;
             return new ReceiverScope(null, null);
         }
 
-        var client = new ServiceBusClient(ServiceBusConnectionString);
-        receiver = ParameterSetName == ParameterSetQueue
-            ? client.AcceptSessionAsync(Queue, SessionId, cancellationToken: ct).GetAwaiter().GetResult()
-            : client.AcceptSessionAsync(Topic, Subscription, SessionId, cancellationToken: ct).GetAwaiter().GetResult();
+        var connectionString = ResolveConnectionString();
+        var target = ResolveQueueOrSubscriptionTarget(
+            Queue,
+            Topic,
+            Subscription,
+            resolvedConnectionString: connectionString);
+        var client = CreateServiceBusClient(connectionString);
+        receiver = target.Kind == ResolvedEntityKind.Queue
+            ? client.AcceptSessionAsync(target.Queue, SessionId, cancellationToken: ct).GetAwaiter().GetResult()
+            : client.AcceptSessionAsync(target.Topic, target.Subscription, SessionId, cancellationToken: ct).GetAwaiter().GetResult();
 
         return new ReceiverScope(client, receiver);
     }

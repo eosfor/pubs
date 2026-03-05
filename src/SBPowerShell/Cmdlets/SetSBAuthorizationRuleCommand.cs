@@ -1,23 +1,18 @@
 using System.Collections.Generic;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Set, "SBAuthorizationRule", SupportsShouldProcess = true)]
 [OutputType(typeof(SharedAccessAuthorizationRule))]
-public sealed class SetSBAuthorizationRuleCommand : PSCmdlet
+public sealed class SetSBAuthorizationRuleCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(ParameterSetName = "Queue", Mandatory = true)]
+    [Parameter(ParameterSetName = "Queue")]
     [ValidateNotNullOrEmpty]
     public string? Queue { get; set; }
 
-    [Parameter(ParameterSetName = "Topic", Mandatory = true)]
+    [Parameter(ParameterSetName = "Topic")]
     [ValidateNotNullOrEmpty]
     public string? Topic { get; set; }
 
@@ -39,8 +34,13 @@ public sealed class SetSBAuthorizationRuleCommand : PSCmdlet
     {
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var entity = AuthorizationRuleHelper.LoadEntity(admin, Queue, Topic);
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueOrTopicTarget(Queue, Topic, resolvedConnectionString: connectionString);
+            var admin = CreateAdminClient(connectionString);
+            var entity = AuthorizationRuleHelper.LoadEntity(
+                admin,
+                target.Kind == ResolvedEntityKind.Queue ? target.Queue : null,
+                target.Kind == ResolvedEntityKind.Topic ? target.Topic : null);
 
             if (!ShouldProcess(entity.EntityPath, $"Update authorization rule '{Rule}'"))
             {
@@ -70,6 +70,11 @@ public sealed class SetSBAuthorizationRuleCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "SetSBAuthorizationRuleFailed", ErrorCategory.NotSpecified, this));
         }
     }

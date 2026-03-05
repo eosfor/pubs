@@ -1,19 +1,14 @@
 using System;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Set, "SBTopic", SupportsShouldProcess = true)]
 [OutputType(typeof(TopicProperties))]
-public sealed class SetSBTopicCommand : PSCmdlet
+public sealed class SetSBTopicCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidateNotNullOrEmpty]
     [Alias("Name", "TopicName")]
     public string Topic { get; set; } = string.Empty;
@@ -41,15 +36,18 @@ public sealed class SetSBTopicCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        if (!ShouldProcess(Topic, "Update Service Bus topic"))
+        var connectionString = ResolveConnectionString();
+        var target = ResolveTopicTarget(Topic, resolvedConnectionString: connectionString);
+
+        if (!ShouldProcess($"Topic '{target.Topic}' (from {target.Source})", "Update Service Bus topic"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var topic = admin.GetTopicAsync(Topic).GetAwaiter().GetResult().Value;
+            var admin = CreateAdminClient(connectionString);
+            var topic = admin.GetTopicAsync(target.Topic).GetAwaiter().GetResult().Value;
 
             Apply(topic);
 
@@ -58,7 +56,12 @@ public sealed class SetSBTopicCommand : PSCmdlet
         }
         catch (Exception ex)
         {
-            ThrowTerminatingError(new ErrorRecord(ex, "SetSBTopicFailed", ErrorCategory.NotSpecified, Topic));
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
+            ThrowTerminatingError(new ErrorRecord(ex, "SetSBTopicFailed", ErrorCategory.NotSpecified, target.Topic));
         }
     }
 

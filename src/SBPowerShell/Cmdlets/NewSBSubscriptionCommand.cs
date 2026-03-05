@@ -1,24 +1,19 @@
 using System;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.New, "SBSubscription", SupportsShouldProcess = true)]
 [OutputType(typeof(SubscriptionProperties))]
-public sealed class NewSBSubscriptionCommand : PSCmdlet
+public sealed class NewSBSubscriptionCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     [Alias("Name", "TopicName")]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidateNotNullOrEmpty]
     [Alias("SubscriptionName")]
     public string Subscription { get; set; } = string.Empty;
@@ -61,16 +56,19 @@ public sealed class NewSBSubscriptionCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        var target = $"{Topic}/{Subscription}";
-        if (!ShouldProcess(target, "Create Service Bus subscription"))
+        var connectionString = ResolveConnectionString();
+        var target = ResolveSubscriptionTarget(Topic, Subscription, resolvedConnectionString: connectionString);
+        var targetPath = $"{target.Topic}/{target.Subscription}";
+
+        if (!ShouldProcess($"Subscription '{targetPath}' (from {target.Source})", "Create Service Bus subscription"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var options = new CreateSubscriptionOptions(Topic, Subscription);
+            var admin = CreateAdminClient(connectionString);
+            var options = new CreateSubscriptionOptions(target.Topic, target.Subscription);
 
             ApplyOptions(options);
 
@@ -89,7 +87,12 @@ public sealed class NewSBSubscriptionCommand : PSCmdlet
         }
         catch (Exception ex)
         {
-            ThrowTerminatingError(new ErrorRecord(ex, "NewSBSubscriptionFailed", ErrorCategory.NotSpecified, target));
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
+            ThrowTerminatingError(new ErrorRecord(ex, "NewSBSubscriptionFailed", ErrorCategory.NotSpecified, targetPath));
         }
     }
 

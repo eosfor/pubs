@@ -1,20 +1,15 @@
 using System.Management.Automation;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Remove, "SBAuthorizationRule", SupportsShouldProcess = true, ConfirmImpact = ConfirmImpact.High)]
-public sealed class RemoveSBAuthorizationRuleCommand : PSCmdlet
+public sealed class RemoveSBAuthorizationRuleCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(ParameterSetName = "Queue", Mandatory = true)]
+    [Parameter(ParameterSetName = "Queue")]
     [ValidateNotNullOrEmpty]
     public string? Queue { get; set; }
 
-    [Parameter(ParameterSetName = "Topic", Mandatory = true)]
+    [Parameter(ParameterSetName = "Topic")]
     [ValidateNotNullOrEmpty]
     public string? Topic { get; set; }
 
@@ -30,8 +25,13 @@ public sealed class RemoveSBAuthorizationRuleCommand : PSCmdlet
     {
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var entity = AuthorizationRuleHelper.LoadEntity(admin, Queue, Topic);
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueOrTopicTarget(Queue, Topic, resolvedConnectionString: connectionString);
+            var admin = CreateAdminClient(connectionString);
+            var entity = AuthorizationRuleHelper.LoadEntity(
+                admin,
+                target.Kind == ResolvedEntityKind.Queue ? target.Queue : null,
+                target.Kind == ResolvedEntityKind.Topic ? target.Topic : null);
 
             if (!Force && !ShouldContinue($"Remove authorization rule '{Rule}' from '{entity.EntityPath}'?", "Confirm rule deletion"))
             {
@@ -54,6 +54,11 @@ public sealed class RemoveSBAuthorizationRuleCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "RemoveSBAuthorizationRuleFailed", ErrorCategory.NotSpecified, this));
         }
     }

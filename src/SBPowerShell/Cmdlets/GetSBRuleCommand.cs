@@ -4,26 +4,21 @@ using System.Management.Automation;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Get, "SBRule", DefaultParameterSetName = ParameterSetAll)]
 [OutputType(typeof(RuleProperties))]
-public sealed class GetSBRuleCommand : PSCmdlet
+public sealed class GetSBRuleCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetAll = "All";
     private const string ParameterSetByName = "ByName";
 
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -44,22 +39,29 @@ public sealed class GetSBRuleCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "GetSBRuleFailed", ErrorCategory.NotSpecified, $"{Topic}/{Subscription}/{Rule}"));
         }
     }
 
     private async Task<IReadOnlyList<RuleProperties>> GetRulesAsync()
     {
-        var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
+        var connectionString = ResolveConnectionString();
+        var target = ResolveSubscriptionTarget(Topic, Subscription, resolvedConnectionString: connectionString);
+        var admin = CreateAdminClient(connectionString);
 
         if (ParameterSetName == ParameterSetByName && !string.IsNullOrWhiteSpace(Rule))
         {
-            var single = (await admin.GetRuleAsync(Topic, Subscription, Rule!)).Value;
+            var single = (await admin.GetRuleAsync(target.Topic, target.Subscription, Rule!)).Value;
             return new[] { single };
         }
 
         var list = new List<RuleProperties>();
-        await foreach (var rule in admin.GetRulesAsync(Topic, Subscription))
+        await foreach (var rule in admin.GetRulesAsync(target.Topic, target.Subscription))
         {
             list.Add(rule);
         }

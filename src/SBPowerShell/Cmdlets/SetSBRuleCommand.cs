@@ -3,26 +3,21 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Set, "SBRule", DefaultParameterSetName = ParameterSetSql, SupportsShouldProcess = true)]
 [OutputType(typeof(RuleProperties))]
-public sealed class SetSBRuleCommand : PSCmdlet
+public sealed class SetSBRuleCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetSql = "Sql";
     private const string ParameterSetCorrelation = "Correlation";
 
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -69,24 +64,31 @@ public sealed class SetSBRuleCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        var target = $"{Topic}/{Subscription}/{Rule}";
-        if (!ShouldProcess(target, "Update Service Bus rule"))
+        var connectionString = ResolveConnectionString();
+        var resolvedTarget = ResolveSubscriptionTarget(Topic, Subscription, resolvedConnectionString: connectionString);
+        var target = $"{resolvedTarget.Topic}/{resolvedTarget.Subscription}/{Rule}";
+        if (!ShouldProcess($"Rule '{target}' (from {resolvedTarget.Source})", "Update Service Bus rule"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var rule = admin.GetRuleAsync(Topic, Subscription, Rule).GetAwaiter().GetResult().Value;
+            var admin = CreateAdminClient(connectionString);
+            var rule = admin.GetRuleAsync(resolvedTarget.Topic, resolvedTarget.Subscription, Rule).GetAwaiter().GetResult().Value;
 
             Apply(rule);
 
-            var updated = admin.UpdateRuleAsync(Topic, Subscription, rule).GetAwaiter().GetResult().Value;
+            var updated = admin.UpdateRuleAsync(resolvedTarget.Topic, resolvedTarget.Subscription, rule).GetAwaiter().GetResult().Value;
             WriteObject(updated);
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "SetSBRuleFailed", ErrorCategory.NotSpecified, target));
         }
     }

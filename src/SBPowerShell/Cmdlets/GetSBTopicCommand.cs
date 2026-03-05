@@ -4,20 +4,15 @@ using System.Management.Automation;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Get, "SBTopic", DefaultParameterSetName = ParameterSetAll)]
 [OutputType(typeof(TopicProperties))]
-public sealed class GetSBTopicCommand : PSCmdlet
+public sealed class GetSBTopicCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetAll = "All";
     private const string ParameterSetByName = "ByName";
-
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
 
     [Parameter(ParameterSetName = ParameterSetByName, Position = 0, ValueFromPipelineByPropertyName = true)]
     [Alias("Name", "TopicName")]
@@ -35,18 +30,25 @@ public sealed class GetSBTopicCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "GetSBTopicFailed", ErrorCategory.NotSpecified, Topic ?? ServiceBusConnectionString));
         }
     }
 
     private async Task<IReadOnlyList<object>> GetTopicsAsync()
     {
-        var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
+        var connectionString = ResolveConnectionString();
+        var admin = CreateAdminClient(connectionString);
         var results = new List<object>();
+        var targetTopic = TryResolveOptionalTopicTarget(Topic, resolvedConnectionString: connectionString)?.Topic;
 
-        if (ParameterSetName == ParameterSetByName && !string.IsNullOrWhiteSpace(Topic))
+        if (!string.IsNullOrWhiteSpace(targetTopic))
         {
-            var single = await ReadSingleTopicAsync(admin, Topic!);
+            var single = await ReadSingleTopicAsync(admin, targetTopic!);
             results.Add(single);
             return results;
         }

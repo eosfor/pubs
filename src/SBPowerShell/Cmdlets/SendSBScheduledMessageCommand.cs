@@ -9,7 +9,7 @@ namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommunications.Send, "SBScheduledMessage", DefaultParameterSetName = ParameterSetTopic)]
 [OutputType(typeof(ScheduledMessageResult))]
-public sealed class SendSBScheduledMessageCommand : PSCmdlet
+public sealed class SendSBScheduledMessageCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetTopic = "Topic";
@@ -24,15 +24,11 @@ public sealed class SendSBScheduledMessageCommand : PSCmdlet
     [Parameter(ValueFromPipeline = true, ParameterSetName = ParameterSetTopic)]
     public ServiceBusReceivedMessage[]? ReceivedInputObject { get; set; }
 
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetTopic)]
+    [Parameter(ParameterSetName = ParameterSetTopic)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
@@ -69,20 +65,27 @@ public sealed class SendSBScheduledMessageCommand : PSCmdlet
                 return;
             }
 
-            var entityPath = ParameterSetName == ParameterSetQueue ? Queue : Topic;
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueOrTopicTarget(Queue, Topic, resolvedConnectionString: connectionString);
+            var entityPath = target.EntityPath;
 
             using var cts = new CancellationTokenSource();
-            ScheduleInternal(entityPath, cts.Token);
+            ScheduleInternal(connectionString, entityPath, cts.Token);
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "SendSBScheduledMessageFailed", ErrorCategory.NotSpecified, this));
         }
     }
 
-    private void ScheduleInternal(string entityPath, CancellationToken cancellationToken)
+    private void ScheduleInternal(string connectionString, string entityPath, CancellationToken cancellationToken)
     {
-        var client = new ServiceBusClient(ServiceBusConnectionString);
+        var client = CreateServiceBusClient(connectionString);
         try
         {
             var sender = client.CreateSender(entityPath);

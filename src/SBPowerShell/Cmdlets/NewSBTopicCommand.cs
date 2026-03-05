@@ -1,19 +1,14 @@
 using System;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.New, "SBTopic", SupportsShouldProcess = true)]
 [OutputType(typeof(TopicProperties))]
-public sealed class NewSBTopicCommand : PSCmdlet
+public sealed class NewSBTopicCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidateNotNullOrEmpty]
     [Alias("Name", "TopicName")]
     public string Topic { get; set; } = string.Empty;
@@ -50,15 +45,18 @@ public sealed class NewSBTopicCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        if (!ShouldProcess(Topic, "Create Service Bus topic"))
+        var connectionString = ResolveConnectionString();
+        var target = ResolveTopicTarget(Topic, resolvedConnectionString: connectionString);
+
+        if (!ShouldProcess($"Topic '{target.Topic}' (from {target.Source})", "Create Service Bus topic"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var options = new CreateTopicOptions(Topic);
+            var admin = CreateAdminClient(connectionString);
+            var options = new CreateTopicOptions(target.Topic);
 
             ApplyOptions(options);
 
@@ -67,7 +65,12 @@ public sealed class NewSBTopicCommand : PSCmdlet
         }
         catch (Exception ex)
         {
-            ThrowTerminatingError(new ErrorRecord(ex, "NewSBTopicFailed", ErrorCategory.NotSpecified, Topic));
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
+            ThrowTerminatingError(new ErrorRecord(ex, "NewSBTopicFailed", ErrorCategory.NotSpecified, target.Topic));
         }
     }
 

@@ -8,27 +8,21 @@ namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Get, "SBSession", DefaultParameterSetName = ParameterSetSubscription)]
 [OutputType(typeof(SBSessionInfo))]
-public sealed class GetSBSessionCommand : PSCmdlet
+public sealed class GetSBSessionCommand : SBSessionAwareCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
     private const string ParameterSetContext = "Context";
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
-    [Parameter(ParameterSetName = ParameterSetContext)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(ParameterSetName = ParameterSetQueue, Mandatory = true, Position = 0)]
+    [Parameter(ParameterSetName = ParameterSetQueue, Position = 0)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(ParameterSetName = ParameterSetSubscription, Mandatory = true, Position = 0)]
+    [Parameter(ParameterSetName = ParameterSetSubscription, Position = 0)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(ParameterSetName = ParameterSetSubscription, Mandatory = true, Position = 1)]
+    [Parameter(ParameterSetName = ParameterSetSubscription, Position = 1)]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -68,14 +62,20 @@ public sealed class GetSBSessionCommand : PSCmdlet
                 throw new ArgumentException("Parameters ActiveOnly and LastUpdatedSince cannot be used together.");
             }
 
-            var entityPath = ResolveEntityPath();
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueOrSubscriptionTarget(
+                Queue,
+                Topic,
+                Subscription,
+                resolvedConnectionString: connectionString);
+            var entityPath = target.EntityPath;
             var timeout = TimeSpan.FromSeconds(OperationTimeoutSec);
             using var cts = new CancellationTokenSource(timeout);
 
             // The heavy lifting is done by the low-level AMQP helper because Azure.Messaging.ServiceBus
             // does not expose a public "list sessions" API.
             var sessionIds = ServiceBusSessionEnumerator.GetSessionsAsync(
-                ServiceBusConnectionString,
+                connectionString,
                 entityPath,
                 ActiveOnly.IsPresent,
                 LastUpdatedSince,
@@ -88,23 +88,21 @@ public sealed class GetSBSessionCommand : PSCmdlet
                 {
                     SessionId = sessionId,
                     EntityPath = entityPath,
-                    Queue = ParameterSetName == ParameterSetQueue ? Queue : null,
-                    Topic = ParameterSetName == ParameterSetSubscription ? Topic : null,
-                    Subscription = ParameterSetName == ParameterSetSubscription ? Subscription : null
+                    Queue = target.Kind == ResolvedEntityKind.Queue ? target.Queue : null,
+                    Topic = target.Kind == ResolvedEntityKind.Subscription ? target.Topic : null,
+                    Subscription = target.Kind == ResolvedEntityKind.Subscription ? target.Subscription : null
                 });
             }
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "GetSBSessionFailed", ErrorCategory.NotSpecified, ResolveErrorTarget()));
         }
-    }
-
-    private string ResolveEntityPath()
-    {
-        return ParameterSetName == ParameterSetQueue
-            ? Queue.Trim('/')
-            : $"{Topic.Trim('/')}/Subscriptions/{Subscription.Trim('/')}";
     }
 
     private object ResolveErrorTarget()
