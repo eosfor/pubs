@@ -1,6 +1,9 @@
 name: Publish Beta Module
 
 on:
+  push:
+    tags:
+      - "v*-beta.*"
   workflow_dispatch:
     inputs:
       ref:
@@ -42,7 +45,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           fetch-depth: 0
 
       - name: Set up .NET 8
@@ -116,43 +119,54 @@ jobs:
         run: |
           $manifestPath = "./src/SBPowerShell/pubs.psd1"
           $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
+          $eventName = "${{ github.event_name }}"
+          if ($eventName -eq "push") {
+            $tag = "${{ github.ref_name }}"
+            if ($tag -notmatch '^v(\d+\.\d+\.\d+)-([A-Za-z][A-Za-z0-9-]*\.\d+)$') {
+              throw "Invalid beta tag '$tag'. Expected format vX.Y.Z-beta.N"
+            }
 
-          $inputBase = "${{ inputs.base_version }}".Trim()
-          if (-not [string]::IsNullOrWhiteSpace($inputBase)) {
-            $baseVersion = $inputBase
+            $baseVersion = $Matches[1]
+            $prerelease = $Matches[2]
+            $fullVersion = "$baseVersion-$prerelease"
           } else {
-            $stableTags = @(git tag --list "v*" | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' })
-            if ($stableTags.Count -gt 0) {
-              $sorted = $stableTags | Sort-Object { [version]($_.Substring(1)) }
-              $baseVersion = $sorted[-1].Substring(1)
+            $inputBase = "${{ inputs.base_version }}".Trim()
+            if (-not [string]::IsNullOrWhiteSpace($inputBase)) {
+              $baseVersion = $inputBase
             } else {
-              $manifest = Import-PowerShellDataFile -Path $manifestPath
-              $baseVersion = $manifest.ModuleVersion.ToString()
+              $stableTags = @(git tag --list "v*" | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' })
+              if ($stableTags.Count -gt 0) {
+                $sorted = $stableTags | Sort-Object { [version]($_.Substring(1)) }
+                $baseVersion = $sorted[-1].Substring(1)
+              } else {
+                $manifest = Import-PowerShellDataFile -Path $manifestPath
+                $baseVersion = $manifest.ModuleVersion.ToString()
+              }
             }
-          }
 
-          if ($baseVersion -notmatch '^\d+\.\d+\.\d+$') {
-            throw "Invalid base_version '$baseVersion'. Expected semantic version X.Y.Z."
-          }
-
-          $label = "${{ inputs.prerelease_label }}".Trim()
-          if ($label -notmatch '^[A-Za-z][A-Za-z0-9-]*$') {
-            throw "Invalid prerelease_label '$label'. Allowed pattern: ^[A-Za-z][A-Za-z0-9-]*$"
-          }
-
-          $inputSeq = "${{ inputs.prerelease_seq }}".Trim()
-          if (-not [string]::IsNullOrWhiteSpace($inputSeq)) {
-            if ($inputSeq -notmatch '^\d+$') {
-              throw "Invalid prerelease_seq '$inputSeq'. Expected positive integer."
+            if ($baseVersion -notmatch '^\d+\.\d+\.\d+$') {
+              throw "Invalid base_version '$baseVersion'. Expected semantic version X.Y.Z."
             }
-            $seq = $inputSeq
-          } else {
-            $seq = "${{ github.run_number }}"
-          }
 
-          $prerelease = "$label.$seq"
-          $fullVersion = "$baseVersion-$prerelease"
-          $tag = "v$fullVersion"
+            $label = "${{ inputs.prerelease_label }}".Trim()
+            if ($label -notmatch '^[A-Za-z][A-Za-z0-9-]*$') {
+              throw "Invalid prerelease_label '$label'. Allowed pattern: ^[A-Za-z][A-Za-z0-9-]*$"
+            }
+
+            $inputSeq = "${{ inputs.prerelease_seq }}".Trim()
+            if (-not [string]::IsNullOrWhiteSpace($inputSeq)) {
+              if ($inputSeq -notmatch '^\d+$') {
+                throw "Invalid prerelease_seq '$inputSeq'. Expected positive integer."
+              }
+              $seq = $inputSeq
+            } else {
+              $seq = "${{ github.run_number }}"
+            }
+
+            $prerelease = "$label.$seq"
+            $fullVersion = "$baseVersion-$prerelease"
+            $tag = "v$fullVersion"
+          }
 
           $repoRoot = (Get-Location).Path
           $moduleDir = [System.IO.Path]::Combine($repoRoot, "out", $moduleName, $baseVersion)
@@ -239,14 +253,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          target_commitish: ${{ inputs.ref }}
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.meta.outputs.module_name }} ${{ steps.meta.outputs.full_version }}
           prerelease: true
           files: ${{ steps.meta.outputs.zip_path }}
           generate_release_notes: true
 
       - name: Publish prerelease to PowerShell Gallery
-        if: inputs.publish_to_gallery == true
+        if: |
+          startsWith(github.ref, 'refs/tags/v') ||
+          (github.event_name == 'workflow_dispatch' && inputs.publish_to_gallery == true)
         shell: pwsh
         env:
           PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
