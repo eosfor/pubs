@@ -86,6 +86,7 @@ public sealed class SBContextContractCmdletsTests : SBCommandTestBase
         Assert.True(info.Parameters.ContainsKey("Context"), $"{cmdletName} must expose Context.");
         Assert.True(info.Parameters.ContainsKey("NoContext"), $"{cmdletName} must expose NoContext.");
         Assert.True(info.Parameters.ContainsKey("IgnoreCertificateChainErrors"), $"{cmdletName} must expose IgnoreCertificateChainErrors.");
+        Assert.True(info.Parameters.ContainsKey("Transport"), $"{cmdletName} must expose Transport.");
     }
 
     [Theory]

@@ -23,7 +23,8 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
 
         ps.AddCommand("Set-SBContext")
             .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
-            .AddParameter("IgnoreCertificateChainErrors", true);
+            .AddParameter("IgnoreCertificateChainErrors", true)
+            .AddParameter("Transport", SBTransport.AmqpWebSockets);
         ps.Invoke();
         ServiceBusFixture.EnsureNoErrors(ps);
 
@@ -35,6 +36,7 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
         Assert.NotNull(safeView.Properties["HasConnectionString"]?.Value);
         Assert.Equal(true, safeView.Properties["HasConnectionString"]?.Value);
         Assert.Equal(true, safeView.Properties["IgnoreCertificateChainErrors"]?.Value);
+        Assert.Equal(SBTransport.AmqpWebSockets, safeView.Properties["Transport"]?.Value);
         Assert.Null(safeView.Properties["ServiceBusConnectionString"]);
 
         ps.Commands.Clear();
@@ -45,6 +47,7 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
         Assert.NotNull(raw);
         Assert.Equal(_fixture.ConnectionString, raw!.ServiceBusConnectionString);
         Assert.True(raw.IgnoreCertificateChainErrors);
+        Assert.Equal(SBTransport.AmqpWebSockets, raw.Transport);
 
         ps.Commands.Clear();
         ps.AddCommand("Get-SBContext").AddParameter("AsConnectionString", true);
@@ -301,6 +304,7 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
         Assert.NotNull(context);
         Assert.Equal(sessionId, context!.SessionId);
         Assert.Equal("session-queue", context.QueueName);
+        Assert.Equal(ServiceBusTransportType.AmqpTcp, context.Transport);
 
         ps.Commands.Clear();
         ps.AddCommand("Close-SBSessionContext")

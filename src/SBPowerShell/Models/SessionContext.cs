@@ -10,6 +10,7 @@ public sealed class SessionContext : IAsyncDisposable
         string sessionId,
         ServiceBusClient client,
         ServiceBusSessionReceiver receiver,
+        ServiceBusTransportType transport,
         string? queueName = null,
         string? topicName = null,
         string? subscriptionName = null)
@@ -19,6 +20,7 @@ public sealed class SessionContext : IAsyncDisposable
         SessionId = sessionId;
         Client = client;
         Receiver = receiver;
+        Transport = transport;
         QueueName = queueName;
         TopicName = topicName;
         SubscriptionName = subscriptionName;
@@ -27,6 +29,7 @@ public sealed class SessionContext : IAsyncDisposable
     public string ConnectionString { get; }
     public string EntityPath { get; }
     public string SessionId { get; }
+    public ServiceBusTransportType Transport { get; }
     public string? QueueName { get; }
     public string? TopicName { get; }
     public string? SubscriptionName { get; }

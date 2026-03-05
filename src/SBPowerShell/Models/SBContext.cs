@@ -6,6 +6,7 @@ public sealed class SBContext
     public string? Queue { get; init; }
     public string? Topic { get; init; }
     public string? Subscription { get; init; }
+    public SBTransport? Transport { get; init; }
     public bool IgnoreCertificateChainErrors { get; init; }
 
     public SBContextEntityMode EntityMode { get; init; } = SBContextEntityMode.Namespace;

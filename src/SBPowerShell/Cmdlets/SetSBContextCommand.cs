@@ -49,6 +49,9 @@ public sealed class SetSBContextCommand : PSCmdlet
     [Parameter]
     public SwitchParameter IgnoreCertificateChainErrors { get; set; }
 
+    [Parameter]
+    public SBTransport? Transport { get; set; }
+
     protected override void EndProcessing()
     {
         var existing = GetCurrentContext();
@@ -95,6 +98,7 @@ public sealed class SetSBContextCommand : PSCmdlet
         var mode = ResolveMode(queue, topic, subscription);
         var createdAt = existing?.CreatedAtUtc ?? DateTime.UtcNow;
         var ignoreChainErrors = ResolveIgnoreCertificateChainErrors(existing?.IgnoreCertificateChainErrors ?? false);
+        var transport = ResolveTransport(existing?.Transport);
 
         return new SBContext
         {
@@ -102,6 +106,7 @@ public sealed class SetSBContextCommand : PSCmdlet
             Queue = queue,
             Topic = topic,
             Subscription = subscription,
+            Transport = transport,
             IgnoreCertificateChainErrors = ignoreChainErrors,
             EntityMode = mode,
             CreatedAtUtc = createdAt,
@@ -119,6 +124,7 @@ public sealed class SetSBContextCommand : PSCmdlet
             ?? SBContextValidation.Normalize(existing?.ServiceBusConnectionString)
             ?? string.Empty;
         var ignoreChainErrors = ResolveIgnoreCertificateChainErrors(context.IgnoreCertificateChainErrors);
+        var transport = ResolveTransport(context.Transport);
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -135,6 +141,7 @@ public sealed class SetSBContextCommand : PSCmdlet
             Queue = queue,
             Topic = topic,
             Subscription = subscription,
+            Transport = transport,
             IgnoreCertificateChainErrors = ignoreChainErrors,
             EntityMode = ResolveMode(queue, topic, subscription),
             CreatedAtUtc = existing?.CreatedAtUtc ?? DateTime.UtcNow,
@@ -223,6 +230,16 @@ public sealed class SetSBContextCommand : PSCmdlet
         if (MyInvocation.BoundParameters.ContainsKey(nameof(IgnoreCertificateChainErrors)))
         {
             return IgnoreCertificateChainErrors.IsPresent;
+        }
+
+        return fallbackValue;
+    }
+
+    private SBTransport? ResolveTransport(SBTransport? fallbackValue)
+    {
+        if (MyInvocation.BoundParameters.ContainsKey(nameof(Transport)))
+        {
+            return Transport;
         }
 
         return fallbackValue;

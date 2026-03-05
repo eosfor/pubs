@@ -37,7 +37,8 @@ public sealed class NewSBSessionContextCommand : SBEntityTargetCmdletBase
         {
             var connectionString = ResolveConnectionString();
             var target = ResolveQueueOrSubscriptionTarget(Queue, Topic, Subscription, resolvedConnectionString: connectionString);
-            var client = CreateServiceBusClient(connectionString);
+            var clientHandle = CreateServiceBusClientWithTransport(connectionString);
+            var client = clientHandle.Client;
 
             ServiceBusSessionReceiver receiver = target.Kind == ResolvedEntityKind.Queue
                 ? client.AcceptSessionAsync(target.Queue, SessionId).GetAwaiter().GetResult()
@@ -51,6 +52,7 @@ public sealed class NewSBSessionContextCommand : SBEntityTargetCmdletBase
                     SessionId,
                     client,
                     receiver,
+                    clientHandle.TransportType,
                     queueName: target.Queue)
                 : new SessionContext(
                     connectionString,
@@ -58,6 +60,7 @@ public sealed class NewSBSessionContextCommand : SBEntityTargetCmdletBase
                     SessionId,
                     client,
                     receiver,
+                    clientHandle.TransportType,
                     topicName: target.Topic,
                     subscriptionName: target.Subscription);
             WriteObject(ctx);
