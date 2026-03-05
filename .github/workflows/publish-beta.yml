@@ -122,13 +122,18 @@ jobs:
           $eventName = "${{ github.event_name }}"
           if ($eventName -eq "push") {
             $tag = "${{ github.ref_name }}"
-            if ($tag -notmatch '^v(\d+\.\d+\.\d+)-([A-Za-z][A-Za-z0-9-]*\.\d+)$') {
+            if ($tag -notmatch '^v(\d+\.\d+\.\d+)-([A-Za-z][A-Za-z0-9-]*)\.(\d+)$') {
               throw "Invalid beta tag '$tag'. Expected format vX.Y.Z-beta.N"
             }
 
             $baseVersion = $Matches[1]
-            $prerelease = $Matches[2]
-            $fullVersion = "$baseVersion-$prerelease"
+            $label = $Matches[2]
+            $seq = $Matches[3]
+            $prereleaseTag = "$label.$seq"
+            $prereleaseManifest = "$label$seq"
+            if ($prereleaseManifest -notmatch '^[A-Za-z0-9]+$') {
+              throw "Derived manifest prerelease '$prereleaseManifest' is invalid. Use alphanumeric label for tag '$tag'."
+            }
           } else {
             $inputBase = "${{ inputs.base_version }}".Trim()
             if (-not [string]::IsNullOrWhiteSpace($inputBase)) {
@@ -149,8 +154,8 @@ jobs:
             }
 
             $label = "${{ inputs.prerelease_label }}".Trim()
-            if ($label -notmatch '^[A-Za-z][A-Za-z0-9-]*$') {
-              throw "Invalid prerelease_label '$label'. Allowed pattern: ^[A-Za-z][A-Za-z0-9-]*$"
+            if ($label -notmatch '^[A-Za-z][A-Za-z0-9]*$') {
+              throw "Invalid prerelease_label '$label'. Allowed pattern for PS Gallery compatibility: ^[A-Za-z][A-Za-z0-9]*$"
             }
 
             $inputSeq = "${{ inputs.prerelease_seq }}".Trim()
@@ -163,10 +168,24 @@ jobs:
               $seq = "${{ github.run_number }}"
             }
 
-            $prerelease = "$label.$seq"
-            $fullVersion = "$baseVersion-$prerelease"
+            $prereleaseTag = "$label.$seq"
+            $prereleaseManifest = "$label$seq"
+            $fullVersion = "$baseVersion-$prereleaseTag"
             $tag = "v$fullVersion"
           }
+          if (-not $prereleaseTag) {
+            throw "Failed to resolve prereleaseTag."
+          }
+
+          if (-not $prereleaseManifest) {
+            throw "Failed to resolve prereleaseManifest."
+          }
+
+          if ($prereleaseManifest -notmatch '^[A-Za-z0-9]+$') {
+            throw "Invalid prerelease for module manifest '$prereleaseManifest'. Allowed pattern: ^[A-Za-z0-9]+$"
+          }
+
+          $fullVersion = "$baseVersion-$prereleaseTag"
 
           $repoRoot = (Get-Location).Path
           $moduleDir = [System.IO.Path]::Combine($repoRoot, "out", $moduleName, $baseVersion)
@@ -174,7 +193,8 @@ jobs:
 
           "module_name=$moduleName" >> $env:GITHUB_OUTPUT
           "base_version=$baseVersion" >> $env:GITHUB_OUTPUT
-          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
+          "prerelease_tag=$prereleaseTag" >> $env:GITHUB_OUTPUT
+          "prerelease_manifest=$prereleaseManifest" >> $env:GITHUB_OUTPUT
           "full_version=$fullVersion" >> $env:GITHUB_OUTPUT
           "module_dir=$moduleDir" >> $env:GITHUB_OUTPUT
           "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
@@ -191,7 +211,7 @@ jobs:
           $moduleDir = "${{ steps.meta.outputs.module_dir }}"
           $manifestPath = Join-Path $moduleDir "$moduleName.psd1"
 
-          Update-ModuleManifest -Path $manifestPath -ModuleVersion "${{ steps.meta.outputs.base_version }}" -Prerelease "${{ steps.meta.outputs.prerelease }}"
+          Update-ModuleManifest -Path $manifestPath -ModuleVersion "${{ steps.meta.outputs.base_version }}" -Prerelease "${{ steps.meta.outputs.prerelease_manifest }}"
 
           $manifest = Import-PowerShellDataFile -Path $manifestPath
           $actualVersion = $manifest.ModuleVersion.ToString()
@@ -201,8 +221,8 @@ jobs:
             throw "Staged manifest ModuleVersion is '$actualVersion', expected '${{ steps.meta.outputs.base_version }}'."
           }
 
-          if ($actualPrerelease -ne "${{ steps.meta.outputs.prerelease }}") {
-            throw "Staged manifest Prerelease is '$actualPrerelease', expected '${{ steps.meta.outputs.prerelease }}'."
+          if ($actualPrerelease -ne "${{ steps.meta.outputs.prerelease_manifest }}") {
+            throw "Staged manifest Prerelease is '$actualPrerelease', expected '${{ steps.meta.outputs.prerelease_manifest }}'."
           }
 
       - name: Validate packaged module exports and help
