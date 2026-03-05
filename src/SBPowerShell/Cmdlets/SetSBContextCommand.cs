@@ -46,6 +46,9 @@ public sealed class SetSBContextCommand : PSCmdlet
     [Parameter]
     public SwitchParameter PassThru { get; set; }
 
+    [Parameter]
+    public SwitchParameter IgnoreCertificateChainErrors { get; set; }
+
     protected override void EndProcessing()
     {
         var existing = GetCurrentContext();
@@ -91,6 +94,7 @@ public sealed class SetSBContextCommand : PSCmdlet
 
         var mode = ResolveMode(queue, topic, subscription);
         var createdAt = existing?.CreatedAtUtc ?? DateTime.UtcNow;
+        var ignoreChainErrors = ResolveIgnoreCertificateChainErrors(existing?.IgnoreCertificateChainErrors ?? false);
 
         return new SBContext
         {
@@ -98,6 +102,7 @@ public sealed class SetSBContextCommand : PSCmdlet
             Queue = queue,
             Topic = topic,
             Subscription = subscription,
+            IgnoreCertificateChainErrors = ignoreChainErrors,
             EntityMode = mode,
             CreatedAtUtc = createdAt,
             UpdatedAtUtc = DateTime.UtcNow,
@@ -113,6 +118,7 @@ public sealed class SetSBContextCommand : PSCmdlet
         var connectionString = SBContextValidation.Normalize(context.ServiceBusConnectionString)
             ?? SBContextValidation.Normalize(existing?.ServiceBusConnectionString)
             ?? string.Empty;
+        var ignoreChainErrors = ResolveIgnoreCertificateChainErrors(context.IgnoreCertificateChainErrors);
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -129,6 +135,7 @@ public sealed class SetSBContextCommand : PSCmdlet
             Queue = queue,
             Topic = topic,
             Subscription = subscription,
+            IgnoreCertificateChainErrors = ignoreChainErrors,
             EntityMode = ResolveMode(queue, topic, subscription),
             CreatedAtUtc = existing?.CreatedAtUtc ?? DateTime.UtcNow,
             UpdatedAtUtc = DateTime.UtcNow,
@@ -209,6 +216,16 @@ public sealed class SetSBContextCommand : PSCmdlet
         }
 
         return SBContextEntityMode.Namespace;
+    }
+
+    private bool ResolveIgnoreCertificateChainErrors(bool fallbackValue)
+    {
+        if (MyInvocation.BoundParameters.ContainsKey(nameof(IgnoreCertificateChainErrors)))
+        {
+            return IgnoreCertificateChainErrors.IsPresent;
+        }
+
+        return fallbackValue;
     }
 
     private SBContext? GetCurrentContext()

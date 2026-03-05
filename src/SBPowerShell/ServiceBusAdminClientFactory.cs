@@ -1,12 +1,18 @@
 using System;
+using System.Net.Http;
 using System.Text.RegularExpressions;
+using Azure.Core.Pipeline;
 using Azure.Messaging.ServiceBus.Administration;
+using SBPowerShell.Internal;
 
 namespace SBPowerShell;
 
 internal static class ServiceBusAdminClientFactory
 {
-    public static ServiceBusAdministrationClient Create(string connectionString)
+    public static ServiceBusAdministrationClient Create(
+        string connectionString,
+        bool ignoreCertificateChainErrors = false,
+        Action<string>? warningWriter = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -14,7 +20,12 @@ internal static class ServiceBusAdminClientFactory
         }
 
         var adjusted = AdjustForEmulator(connectionString);
-        return new ServiceBusAdministrationClient(adjusted);
+        var options = new ServiceBusAdministrationClientOptions
+        {
+            Transport = CreateTransport(ignoreCertificateChainErrors, warningWriter)
+        };
+
+        return new ServiceBusAdministrationClient(adjusted, options);
     }
 
     private static string AdjustForEmulator(string connectionString)
@@ -54,5 +65,16 @@ internal static class ServiceBusAdminClientFactory
             // If parsing fails, keep the original connection string to avoid masking the real error.
             return connectionString;
         }
+    }
+
+    private static HttpPipelineTransport CreateTransport(bool ignoreCertificateChainErrors, Action<string>? warningWriter)
+    {
+        var handler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = TlsCertificateValidation.CreateHttpCallback(ignoreCertificateChainErrors, warningWriter)
+        };
+
+        var httpClient = new HttpClient(handler, disposeHandler: true);
+        return new HttpClientTransport(httpClient);
     }
 }

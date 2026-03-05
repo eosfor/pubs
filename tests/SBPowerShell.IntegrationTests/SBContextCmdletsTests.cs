@@ -22,7 +22,8 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
         using var ps = _fixture.CreateShell();
 
         ps.AddCommand("Set-SBContext")
-            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString);
+            .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+            .AddParameter("IgnoreCertificateChainErrors", true);
         ps.Invoke();
         ServiceBusFixture.EnsureNoErrors(ps);
 
@@ -33,6 +34,7 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
 
         Assert.NotNull(safeView.Properties["HasConnectionString"]?.Value);
         Assert.Equal(true, safeView.Properties["HasConnectionString"]?.Value);
+        Assert.Equal(true, safeView.Properties["IgnoreCertificateChainErrors"]?.Value);
         Assert.Null(safeView.Properties["ServiceBusConnectionString"]);
 
         ps.Commands.Clear();
@@ -42,6 +44,7 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
 
         Assert.NotNull(raw);
         Assert.Equal(_fixture.ConnectionString, raw!.ServiceBusConnectionString);
+        Assert.True(raw.IgnoreCertificateChainErrors);
 
         ps.Commands.Clear();
         ps.AddCommand("Get-SBContext").AddParameter("AsConnectionString", true);

@@ -66,6 +66,7 @@ public sealed class GetSBContextCommand : PSCmdlet
         view.Properties.Add(new PSNoteProperty("Queue", context.Queue));
         view.Properties.Add(new PSNoteProperty("Topic", context.Topic));
         view.Properties.Add(new PSNoteProperty("Subscription", context.Subscription));
+        view.Properties.Add(new PSNoteProperty("IgnoreCertificateChainErrors", context.IgnoreCertificateChainErrors));
         view.Properties.Add(new PSNoteProperty("HasConnectionString", !string.IsNullOrWhiteSpace(context.ServiceBusConnectionString)));
         view.Properties.Add(new PSNoteProperty("ConnectionStringFingerprint", CreateFingerprint(context.ServiceBusConnectionString)));
         view.Properties.Add(new PSNoteProperty("CreatedAtUtc", context.CreatedAtUtc));

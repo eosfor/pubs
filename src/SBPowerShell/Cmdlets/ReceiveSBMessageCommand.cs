@@ -136,7 +136,7 @@ public sealed class ReceiveSBMessageCommand : SBEntityTargetCmdletBase
             resolvedConnectionString: resolvedConnectionString);
 
         var client = SessionContext is null
-            ? new ServiceBusClient(resolvedConnectionString, CreateClientOptions(plan))
+            ? CreateServiceBusClient(resolvedConnectionString, CreateClientOptions(plan))
             : null;
 
         if (SessionContext is not null)

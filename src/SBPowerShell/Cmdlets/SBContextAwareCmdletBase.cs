@@ -30,6 +30,9 @@ public abstract class SBContextAwareCmdletBase : PSCmdlet
     [Parameter]
     public SwitchParameter NoContext { get; set; }
 
+    [Parameter]
+    public SwitchParameter IgnoreCertificateChainErrors { get; set; }
+
     protected void SetCurrentContext(SBContext context)
     {
         _contextStore.Set(SessionState, context);
@@ -97,12 +100,20 @@ public abstract class SBContextAwareCmdletBase : PSCmdlet
 
     protected ServiceBusClient CreateServiceBusClient(string connectionString)
     {
-        return DataClientProvider.Create(connectionString);
+        var tlsOptions = ResolveTlsValidationOptions();
+        return DataClientProvider.Create(connectionString, tlsOptions.IgnoreCertificateChainErrors, tlsOptions.WarningWriter);
+    }
+
+    protected ServiceBusClient CreateServiceBusClient(string connectionString, ServiceBusClientOptions options)
+    {
+        var tlsOptions = ResolveTlsValidationOptions();
+        return DataClientProvider.Create(connectionString, options, tlsOptions.IgnoreCertificateChainErrors, tlsOptions.WarningWriter);
     }
 
     protected ServiceBusAdministrationClient CreateAdminClient(string connectionString)
     {
-        return AdminClientProvider.Create(connectionString);
+        var tlsOptions = ResolveTlsValidationOptions();
+        return AdminClientProvider.Create(connectionString, tlsOptions.IgnoreCertificateChainErrors, tlsOptions.WarningWriter);
     }
 
     protected void EnsureValidContext(SBContext context)
@@ -172,20 +183,82 @@ public abstract class SBContextAwareCmdletBase : PSCmdlet
             WriteWarning($"Explicit parameter '{name}' overrides value from SB context.");
         }
     }
+
+    private (bool IgnoreCertificateChainErrors, Action<string> WarningWriter) ResolveTlsValidationOptions()
+    {
+        if (MyInvocation.BoundParameters.ContainsKey(nameof(IgnoreCertificateChainErrors)))
+        {
+            var explicitValue = IgnoreCertificateChainErrors.IsPresent;
+            WriteVerbose($"Resolved IgnoreCertificateChainErrors from Explicit parameter: {explicitValue}.");
+            WarnWhenTlsPolicyOverridden(explicitValue);
+            return (explicitValue, WriteWarning);
+        }
+
+        if (Context is not null)
+        {
+            EnsureValidContext(Context);
+            WriteVerbose($"Resolved IgnoreCertificateChainErrors from -Context: {Context.IgnoreCertificateChainErrors}.");
+            return (Context.IgnoreCertificateChainErrors, WriteWarning);
+        }
+
+        if (!NoContext)
+        {
+            var current = GetCurrentContext();
+            if (current is not null)
+            {
+                EnsureValidContext(current);
+                WriteVerbose($"Resolved IgnoreCertificateChainErrors from SB context: {current.IgnoreCertificateChainErrors}.");
+                return (current.IgnoreCertificateChainErrors, WriteWarning);
+            }
+        }
+
+        return (false, WriteWarning);
+    }
+
+    private void WarnWhenTlsPolicyOverridden(bool explicitValue)
+    {
+        if (Context is null)
+        {
+            return;
+        }
+
+        if (Context.IgnoreCertificateChainErrors != explicitValue)
+        {
+            WriteWarning("Explicit parameter 'IgnoreCertificateChainErrors' overrides value from SB context.");
+        }
+    }
 }
 
 internal static class AdminClientProvider
 {
-    public static ServiceBusAdministrationClient Create(string connectionString)
+    public static ServiceBusAdministrationClient Create(
+        string connectionString,
+        bool ignoreCertificateChainErrors,
+        Action<string>? warningWriter)
     {
-        return ServiceBusAdminClientFactory.Create(connectionString);
+        return ServiceBusAdminClientFactory.Create(connectionString, ignoreCertificateChainErrors, warningWriter);
     }
 }
 
 internal static class DataClientProvider
 {
-    public static ServiceBusClient Create(string connectionString)
+    public static ServiceBusClient Create(
+        string connectionString,
+        bool ignoreCertificateChainErrors,
+        Action<string>? warningWriter)
     {
-        return new ServiceBusClient(connectionString);
+        var options = new ServiceBusClientOptions();
+        TlsCertificateValidation.Apply(options, ignoreCertificateChainErrors, warningWriter);
+        return new ServiceBusClient(connectionString, options);
+    }
+
+    public static ServiceBusClient Create(
+        string connectionString,
+        ServiceBusClientOptions options,
+        bool ignoreCertificateChainErrors,
+        Action<string>? warningWriter)
+    {
+        TlsCertificateValidation.Apply(options, ignoreCertificateChainErrors, warningWriter);
+        return new ServiceBusClient(connectionString, options);
     }
 }

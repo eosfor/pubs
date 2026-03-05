@@ -114,7 +114,7 @@ public sealed class ReceiveSBDLQMessageCommand : SBEntityTargetCmdletBase
         ServiceBusClient? client = null;
         try
         {
-            client = new ServiceBusClient(connectionString, CreateClientOptions(plan));
+            client = CreateServiceBusClient(connectionString, CreateClientOptions(plan));
 
             if (target.Kind == ResolvedEntityKind.Queue)
             {
