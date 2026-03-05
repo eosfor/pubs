@@ -16,14 +16,15 @@ Clears Service Bus SBDLQ operations.
 ```
 Clear-SBDLQ [-Queue <String>] [-TransferDeadLetter] [-BatchSize <Int32>] [-WaitSeconds <Int32>]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
 Clear-SBDLQ [-Topic <String>] [-Subscription <String>] [-TransferDeadLetter] [-BatchSize <Int32>]
  [-WaitSeconds <Int32>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -197,6 +198,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

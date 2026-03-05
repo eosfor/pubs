@@ -19,7 +19,7 @@ New-SBSubscription [-Topic <String>] [[-Subscription] <String>] [-RequiresSessio
  [-LockDuration <TimeSpan>] [-DefaultMessageTimeToLive <TimeSpan>] [-AutoDeleteOnIdle <TimeSpan>]
  [-ForwardTo <String>] [-ForwardDeadLetteredMessagesTo <String>] [-UserMetadata <String>] [-SqlFilter <String>]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -344,6 +344,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

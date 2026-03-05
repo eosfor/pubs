@@ -103,6 +103,8 @@ Clear-SBContext
 
 `-NoContext` отключает fallback на текущий `SBContext` для конкретного вызова.
 `-IgnoreCertificateChainErrors` (в `Set-SBContext` или на конкретном cmdlet) включает режим, где ошибки цепочки сертификата дают warning с деталями, но цепочка может быть принята.
+`-Transport` поддерживает `AmqpTcp` и `AmqpWebSockets`.
+Если `-Transport` не задан, используется auto-режим: сначала AMQP TCP, при недоступности порта происходит fallback на AMQP WebSockets (с warning).
 
 Примеры:
 ```pwsh
@@ -125,6 +127,13 @@ Receive-SBMessage -Queue "test-queue" -NoContext -ServiceBusConnectionString $co
 # 5) Разрешить invalid chain централизованно через SBContext
 Set-SBContext -ServiceBusConnectionString $conn -IgnoreCertificateChainErrors
 Get-SBTopic
+
+# 6) Зафиксировать транспорт в контексте для всех data-plane вызовов
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue" -Transport AmqpWebSockets
+Send-SBMessage -Message (New-SBMessage -Body "forced-ws")
+
+# 7) Переопределить транспорт на одном вызове
+Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Transport AmqpTcp -MaxMessages 1
 ```
 
 ### Поведение WaitSeconds

@@ -15,26 +15,28 @@ Updates Service Bus SBContext operations.
 ### Namespace
 ```
 Set-SBContext -ServiceBusConnectionString <String> [-Strict] [-NoClobber] [-PassThru]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Queue
 ```
 Set-SBContext [-ServiceBusConnectionString <String>] -Queue <String> [-Strict] [-NoClobber] [-PassThru]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Subscription
 ```
 Set-SBContext [-ServiceBusConnectionString <String>] -Topic <String> -Subscription <String> [-Strict]
- [-NoClobber] [-PassThru] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+ [-NoClobber] [-PassThru] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### FromObject
 ```
 Set-SBContext -InputObject <SBContext> [-Strict] [-NoClobber] [-PassThru] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -213,6 +215,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

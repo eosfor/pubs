@@ -17,7 +17,8 @@ Replays Service Bus SBDLQMessage operations.
 Replay-SBDLQMessage [-Queue <String>] [-DestinationQueue <String>] [-DestinationTopic <String>]
  [-TransferDeadLetter] [-NoCompleteSource] [-MaxMessages <Int32>] [-BatchSize <Int32>] [-WaitSeconds <Int32>]
  [-Message <ServiceBusReceivedMessage[]>] [-ServiceBusConnectionString <String>] [-Context <SBContext>]
- [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Subscription
@@ -26,7 +27,7 @@ Replay-SBDLQMessage [-Topic <String>] [-Subscription <String>] [-DestinationQueu
  [-DestinationTopic <String>] [-TransferDeadLetter] [-NoCompleteSource] [-MaxMessages <Int32>]
  [-BatchSize <Int32>] [-WaitSeconds <Int32>] [-Message <ServiceBusReceivedMessage[]>]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -275,6 +276,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

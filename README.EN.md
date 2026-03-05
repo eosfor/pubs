@@ -101,6 +101,8 @@ Resolution order for context-aware cmdlets:
 
 `-NoContext` disables fallback to current `SBContext` for a single invocation.
 `-IgnoreCertificateChainErrors` (via `Set-SBContext` or per cmdlet) enables a mode where certificate-chain failures emit detailed warnings and can be accepted.
+`-Transport` supports `AmqpTcp` and `AmqpWebSockets`.
+If `-Transport` is not specified, auto mode is used: try AMQP TCP first, then fall back to AMQP WebSockets on TCP probe failure (with warning).
 
 Examples:
 ```pwsh
@@ -123,6 +125,13 @@ Receive-SBMessage -Queue "test-queue" -NoContext -ServiceBusConnectionString $co
 # 5) Allow invalid chain centrally via SBContext
 Set-SBContext -ServiceBusConnectionString $conn -IgnoreCertificateChainErrors
 Get-SBTopic
+
+# 6) Pin transport in context for all data-plane calls
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue" -Transport AmqpWebSockets
+Send-SBMessage -Message (New-SBMessage -Body "forced-ws")
+
+# 7) Override transport on a single command
+Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Transport AmqpTcp -MaxMessages 1
 ```
 
 ### WaitSeconds Behavior

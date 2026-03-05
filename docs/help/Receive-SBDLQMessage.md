@@ -16,42 +16,44 @@ Receives messages from Service Bus dead-letter queues (queue DLQ or subscription
 ```
 Receive-SBDLQMessage [-Queue <String>] [-BatchSize <Int32>] [-Peek] [-NoComplete]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### QueueMax
 ```
 Receive-SBDLQMessage [-Queue <String>] -MaxMessages <Int32> [-BatchSize <Int32>] [-Peek] [-NoComplete]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### QueueWait
 ```
 Receive-SBDLQMessage [-Queue <String>] [-BatchSize <Int32>] -WaitSeconds <Int32> [-Peek] [-NoComplete]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
 Receive-SBDLQMessage [-Topic <String>] [-Subscription <String>] [-BatchSize <Int32>] [-Peek] [-NoComplete]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### SubscriptionMax
 ```
 Receive-SBDLQMessage [-Topic <String>] [-Subscription <String>] -MaxMessages <Int32> [-BatchSize <Int32>]
  [-Peek] [-NoComplete] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### SubscriptionWait
 ```
 Receive-SBDLQMessage [-Topic <String>] [-Subscription <String>] [-BatchSize <Int32>] -WaitSeconds <Int32>
  [-Peek] [-NoComplete] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -260,6 +262,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

@@ -17,7 +17,7 @@ Updates Service Bus SBMessage operations.
 Set-SBMessage [-Queue <String>] -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-Defer]
  [-DeadLetter] [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
@@ -26,7 +26,7 @@ Set-SBMessage [-Queue <String>] [-Topic <String>] [-Subscription <String>]
  -Message <ServiceBusReceivedMessage[]> [-Complete] [-Abandon] [-Defer] [-DeadLetter]
  [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>] -SessionContext <SessionContext>
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
@@ -34,7 +34,7 @@ Set-SBMessage [-Queue <String>] [-Topic <String>] [-Subscription <String>]
 Set-SBMessage [-Topic <String>] [-Subscription <String>] -Message <ServiceBusReceivedMessage[]> [-Complete]
  [-Abandon] [-Defer] [-DeadLetter] [-DeadLetterReason <String>] [-DeadLetterErrorDescription <String>]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -291,6 +291,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

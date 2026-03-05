@@ -17,7 +17,7 @@ Sends Service Bus SBMessage operations.
 Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>] [-Topic <String>]
  [-PerSessionThreadAuto] [-PerSessionThread <Int32>] [-BatchSize <Int32>] [-PassThru]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Queue
@@ -25,7 +25,7 @@ Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceive
 Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>] [-Queue <String>]
  [-PerSessionThreadAuto] [-PerSessionThread <Int32>] [-BatchSize <Int32>] [-PassThru]
  [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
@@ -33,7 +33,8 @@ Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceive
 Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>] [-Queue <String>]
  [-Topic <String>] -SessionContext <SessionContext> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
  [-BatchSize <Int32>] [-PassThru] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -253,6 +254,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

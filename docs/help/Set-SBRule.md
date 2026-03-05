@@ -16,8 +16,8 @@ Updates Service Bus SBRule operations.
 ```
 Set-SBRule [-Topic <String>] [-Subscription <String>] [-Rule] <String> [-SqlFilter <String>]
  [-SqlAction <String>] [-ClearAction] [-ServiceBusConnectionString <String>] [-Context <SBContext>]
- [-NoContext] [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
- [<CommonParameters>]
+ [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Correlation
@@ -26,7 +26,8 @@ Set-SBRule [-Topic <String>] [-Subscription <String>] [-Rule] <String> [-Correla
  [-MessageId <String>] [-To <String>] [-ReplyTo <String>] [-Subject <String>] [-SessionId <String>]
  [-ReplyToSessionId <String>] [-ContentType <String>] [-CorrelationProperty <Hashtable>] [-SqlAction <String>]
  [-ClearAction] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -374,6 +375,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

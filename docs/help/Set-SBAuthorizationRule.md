@@ -16,14 +16,16 @@ Updates Service Bus SBAuthorizationRule operations.
 ```
 Set-SBAuthorizationRule [-Queue <String>] [-Rule] <String> [-Rights <AccessRights[]>] [-PrimaryKey <String>]
  [-SecondaryKey <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
 ```
 
 ### Topic
 ```
 Set-SBAuthorizationRule [-Topic <String>] [-Rule] <String> [-Rights <AccessRights[]>] [-PrimaryKey <String>]
  [-SecondaryKey <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
- [-IgnoreCertificateChainErrors] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -237,6 +239,21 @@ Specifies the IgnoreCertificateChainErrors value for this command.
 
 ```yaml
 Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 
