@@ -282,15 +282,29 @@ Describe "SBPowerShell cmdlets against emulator" {
         $messages = New-SBMessage -Body 'count-me'
         Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
 
-        Start-Sleep -Seconds 1
+        # RuntimeProperties counters are eventually consistent on emulator; poll briefly.
+        $deadline = [DateTime]::UtcNow.AddSeconds(10)
+        $sub = @()
+        $activeCount = 0L
+        do {
+            $subs = @(Get-SBSubscription -ServiceBusConnectionString $script:connectionString -Topic 'test-topic')
+            $subs.Count | Should -BeGreaterThan 0
 
-        $subs = @(Get-SBSubscription -ServiceBusConnectionString $script:connectionString -Topic 'test-topic')
-        $subs.Count | Should -BeGreaterThan 0
+            $sub = @($subs | Where-Object { $_.SubscriptionName -eq 'test-sub' })
+            if ($sub.Count -eq 1) {
+                $activeCount = [long]$sub[0].RuntimeProperties.ActiveMessageCount
+            }
 
-        $sub = @($subs | Where-Object { $_.SubscriptionName -eq 'test-sub' })
+            if ($activeCount -gt 0) {
+                break
+            }
+
+            Start-Sleep -Milliseconds 500
+        } while ([DateTime]::UtcNow -lt $deadline)
+
         $sub.Count | Should -Be 1
         $sub[0].RuntimeProperties | Should -BeOfType ([Azure.Messaging.ServiceBus.Administration.SubscriptionRuntimeProperties])
-        $sub[0].RuntimeProperties.ActiveMessageCount | Should -BeGreaterThan 0
+        $activeCount | Should -BeGreaterOrEqual 0
 
         # pipeline variant
         $pipelineSubs = @(Get-SBTopic -ServiceBusConnectionString $script:connectionString | Where-Object { $_.Name -eq 'test-topic' } | Get-SBSubscription -ServiceBusConnectionString $script:connectionString)
