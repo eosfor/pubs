@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Management.Automation;
+using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using SBPowerShell.Models;
 using Xunit;
@@ -215,6 +217,69 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
         Assert.Equal("ctx-sub", received[0].Body.ToString());
 
         ClearContext(ps);
+    }
+
+    [Fact]
+    public void Resolver_supports_context_only_export_for_queue()
+    {
+        var queue = UniqueName("ctx-export-q");
+        var admin = CreateAdminClient();
+        admin.CreateQueueAsync(queue).GetAwaiter().GetResult();
+
+        var messages = _fixture.NewMessages(null, new[] { "ctx-export" }, new Dictionary<string, object> { ["mode"] = "export" });
+        var outputPath = Path.Combine(Path.GetTempPath(), $"ctx-export-{Guid.NewGuid():N}.jsonl");
+
+        using var ps = _fixture.CreateShell();
+        try
+        {
+            ps.AddCommand("Set-SBContext")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("Queue", queue);
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+
+            ps.Commands.Clear();
+            ps.AddCommand("Send-SBMessage")
+                .AddParameter("Message", messages);
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+
+            ps.Commands.Clear();
+            ps.AddCommand("Export-SBMessage")
+                .AddParameter("OutputPath", outputPath)
+                .AddParameter("MaxMessages", 1);
+            var file = ps.Invoke<FileInfo>().Single();
+            ServiceBusFixture.EnsureNoErrors(ps);
+
+            Assert.Equal(outputPath, file.FullName);
+            Assert.True(File.Exists(outputPath));
+
+            var line = File.ReadAllText(outputPath).Trim();
+            using var doc = JsonDocument.Parse(line);
+            Assert.Equal("ctx-export", doc.RootElement.GetProperty("Body").GetProperty("Utf8").GetString());
+            Assert.Equal("export", doc.RootElement.GetProperty("ApplicationProperties").GetProperty("mode").GetString());
+
+            var received = _fixture.ReceiveFromQueue(queue, maxMessages: 1);
+            Assert.Single(received);
+            Assert.Equal("ctx-export", received[0].Body.ToString());
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(outputPath))
+                {
+                    File.Delete(outputPath);
+                }
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+
+            ClearContext(ps);
+            SafeDeleteQueue(admin, queue);
+        }
     }
 
     [Fact]

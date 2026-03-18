@@ -32,6 +32,7 @@ public sealed class SBContextContractCmdletsTests : SBCommandTestBase
         "New-SBSessionContext",
         "Clear-SBQueue",
         "Clear-SBSubscription",
+        "Export-SBMessage",
         "Get-SBTopic",
         "Get-SBSubscription",
         "Get-SBQueue",
