@@ -283,6 +283,73 @@ public sealed class SBContextCmdletsTests : SBCommandTestBase
     }
 
     [Fact]
+    public void Resolver_supports_context_only_dlq_export_for_queue()
+    {
+        var queue = UniqueName("ctx-export-dlq-q");
+        var admin = CreateAdminClient();
+        admin.CreateQueueAsync(queue).GetAwaiter().GetResult();
+
+        var messages = _fixture.NewMessages(null, new[] { "ctx-export-dlq" }, new Dictionary<string, object> { ["mode"] = "export-dlq" });
+        var outputPath = Path.Combine(Path.GetTempPath(), $"ctx-export-dlq-{Guid.NewGuid():N}.jsonl");
+
+        using var ps = _fixture.CreateShell();
+        try
+        {
+            ps.AddCommand("Set-SBContext")
+                .AddParameter("ServiceBusConnectionString", _fixture.ConnectionString)
+                .AddParameter("Queue", queue);
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+
+            ps.Commands.Clear();
+            ps.AddCommand("Send-SBMessage")
+                .AddParameter("Message", messages);
+            ps.Invoke();
+            ServiceBusFixture.EnsureNoErrors(ps);
+
+            DeadLetterSingleQueueMessage(queue);
+            WaitForDlqMessage(queue);
+
+            ps.Commands.Clear();
+            ps.AddCommand("Export-SBDLQMessage")
+                .AddParameter("OutputPath", outputPath)
+                .AddParameter("MaxMessages", 1);
+            var file = ps.Invoke<FileInfo>().Single();
+            ServiceBusFixture.EnsureNoErrors(ps);
+
+            Assert.Equal(outputPath, file.FullName);
+            Assert.True(File.Exists(outputPath));
+
+            var line = File.ReadAllText(outputPath).Trim();
+            using var doc = JsonDocument.Parse(line);
+            Assert.Equal("ctx-export-dlq", doc.RootElement.GetProperty("Body").GetProperty("Utf8").GetString());
+            Assert.Equal("export-dlq", doc.RootElement.GetProperty("ApplicationProperties").GetProperty("mode").GetString());
+            Assert.Equal("integration-test", doc.RootElement.GetProperty("BrokerProperties").GetProperty("DeadLetterReason").GetString());
+
+            var received = _fixture.ReceiveDlqFromQueue(queue, maxMessages: 1);
+            Assert.Single(received);
+            Assert.Equal("ctx-export-dlq", received[0].Body.ToString());
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(outputPath))
+                {
+                    File.Delete(outputPath);
+                }
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+
+            ClearContext(ps);
+            SafeDeleteQueue(admin, queue);
+        }
+    }
+
+    [Fact]
     public void Resolver_supports_context_only_Get_SBTopic()
     {
         using var ps = _fixture.CreateShell();

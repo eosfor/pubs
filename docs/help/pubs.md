@@ -32,6 +32,9 @@ pubs module provides cmdlets for Azure Service Bus messaging, entity administrat
 ### [Export-SBMessage](Export-SBMessage.md)
 pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
 
+### [Export-SBDLQMessage](Export-SBDLQMessage.md)
+pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
+
 ### [Get-SBAuthorizationRule](Get-SBAuthorizationRule.md)
 pubs module provides cmdlets for Azure Service Bus messaging, entity administration, DLQ operations, session state, and topology management.
 

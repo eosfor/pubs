@@ -24,6 +24,7 @@ public sealed class SBContextContractCmdletsTests : SBCommandTestBase
         "Send-SBMessage",
         "Receive-SBMessage",
         "Receive-SBDLQMessage",
+        "Export-SBDLQMessage",
         "Receive-SBDeferredMessage",
         "Set-SBMessage",
         "Get-SBSession",

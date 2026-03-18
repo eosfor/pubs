@@ -37,6 +37,7 @@
         'Send-SBMessage',
         'Receive-SBMessage',
         'Export-SBMessage',
+        'Export-SBDLQMessage',
         'Receive-SBDLQMessage',
         'Receive-SBDeferredMessage',
         'Set-SBMessage',

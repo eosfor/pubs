@@ -793,6 +793,76 @@ Describe "SBPowerShell cmdlets against emulator" {
         }
     }
 
+    It "exports queue DLQ messages to json without removing them" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
+
+        $messages = New-SBMessage -CustomProperties @{ category = 'dlq-export' } -Body 'dlq-export-queue'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete |
+            Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -DeadLetter -DeadLetterReason 'export-dlq' | Out-Null
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'queue-dlq-export.json'
+
+        try {
+            $result = @(Export-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -Format Json -MaxMessages 1)
+            $result.Count | Should -Be 1
+            $result[0].FullName | Should -Be (Resolve-Path $outputPath).Path
+
+            $exported = @(Get-Content $outputPath -Raw | ConvertFrom-Json)
+            $exported.Count | Should -Be 1
+            $exported[0].Body.Utf8 | Should -Be 'dlq-export-queue'
+            $exported[0].ApplicationProperties.category | Should -Be 'dlq-export'
+            $exported[0].BrokerProperties.DeadLetterReason | Should -Be 'export-dlq'
+
+            $received = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1)
+            $received.Count | Should -Be 1
+            $received[0].Body.ToString() | Should -Be 'dlq-export-queue'
+        }
+        finally {
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
+    It "exports subscription DLQ messages to json without removing them" {
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
+
+        $messages = New-SBMessage -CustomProperties @{ category = 'sub-dlq-export' } -Body 'dlq-export-sub'
+        Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1 -NoComplete |
+            Set-SBMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -DeadLetter -DeadLetterReason 'export-dlq-sub' | Out-Null
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'subscription-dlq-export.json'
+
+        try {
+            Export-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -Format Json -MaxMessages 1 | Out-Null
+
+            $exported = @(Get-Content $outputPath -Raw | ConvertFrom-Json)
+            $exported.Count | Should -Be 1
+            $exported[0].Body.Utf8 | Should -Be 'dlq-export-sub'
+            $exported[0].ApplicationProperties.category | Should -Be 'sub-dlq-export'
+            $exported[0].BrokerProperties.DeadLetterReason | Should -Be 'export-dlq-sub'
+
+            $received = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1)
+            $received.Count | Should -Be 1
+            $received[0].Body.ToString() | Should -Be 'dlq-export-sub'
+        }
+        finally {
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
     It "exports using current SB context to jsonl" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
 
