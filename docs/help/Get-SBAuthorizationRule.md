@@ -14,13 +14,15 @@ Reads and returns Service Bus SBAuthorizationRule operations.
 
 ### Queue
 ```
-Get-SBAuthorizationRule -ServiceBusConnectionString <String> -Queue <String> [-Rule <String>]
+Get-SBAuthorizationRule [-Queue <String>] [-Rule <String>] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Topic
 ```
-Get-SBAuthorizationRule -ServiceBusConnectionString <String> -Topic <String> [-Rule <String>]
+Get-SBAuthorizationRule [-Topic <String>] [-Rule <String>] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -31,20 +33,12 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ## EXAMPLES
 
-### Example 1 (Queue)
+### Example 1
 ```powershell
-PS C:\\> Get-SBAuthorizationRule -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>'
+PS C:\\> Get-SBAuthorizationRule
 ```
 
-Runs Get-SBAuthorizationRule using the 'Queue' parameter set.
-
-### Example 2 (Topic)
-```powershell
-PS C:\\> Get-SBAuthorizationRule -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>'
-```
-
-Runs Get-SBAuthorizationRule using the 'Topic' parameter set.
-
+Runs Get-SBAuthorizationRule with default parameters.
 
 ## PARAMETERS
 
@@ -56,7 +50,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -86,7 +80,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -101,7 +95,7 @@ Type: String
 Parameter Sets: Topic
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -115,6 +109,66 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

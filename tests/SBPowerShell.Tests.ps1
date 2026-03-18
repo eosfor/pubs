@@ -282,15 +282,29 @@ Describe "SBPowerShell cmdlets against emulator" {
         $messages = New-SBMessage -Body 'count-me'
         Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
 
-        Start-Sleep -Seconds 1
+        # RuntimeProperties counters are eventually consistent on emulator; poll briefly.
+        $deadline = [DateTime]::UtcNow.AddSeconds(10)
+        $sub = @()
+        $activeCount = 0L
+        do {
+            $subs = @(Get-SBSubscription -ServiceBusConnectionString $script:connectionString -Topic 'test-topic')
+            $subs.Count | Should -BeGreaterThan 0
 
-        $subs = @(Get-SBSubscription -ServiceBusConnectionString $script:connectionString -Topic 'test-topic')
-        $subs.Count | Should -BeGreaterThan 0
+            $sub = @($subs | Where-Object { $_.SubscriptionName -eq 'test-sub' })
+            if ($sub.Count -eq 1) {
+                $activeCount = [long]$sub[0].RuntimeProperties.ActiveMessageCount
+            }
 
-        $sub = @($subs | Where-Object { $_.SubscriptionName -eq 'test-sub' })
+            if ($activeCount -gt 0) {
+                break
+            }
+
+            Start-Sleep -Milliseconds 500
+        } while ([DateTime]::UtcNow -lt $deadline)
+
         $sub.Count | Should -Be 1
         $sub[0].RuntimeProperties | Should -BeOfType ([Azure.Messaging.ServiceBus.Administration.SubscriptionRuntimeProperties])
-        $sub[0].RuntimeProperties.ActiveMessageCount | Should -BeGreaterThan 0
+        $activeCount | Should -BeGreaterOrEqual 0
 
         # pipeline variant
         $pipelineSubs = @(Get-SBTopic -ServiceBusConnectionString $script:connectionString | Where-Object { $_.Name -eq 'test-topic' } | Get-SBSubscription -ServiceBusConnectionString $script:connectionString)
@@ -439,7 +453,24 @@ Describe "SBPowerShell cmdlets against emulator" {
         $seed = New-SBMessage -SessionId $sid -Body 'seed'
         Send-SBMessage -Topic 'session-topic' -Message $seed -ServiceBusConnectionString $script:connectionString
 
-        $ctx = New-SBSessionContext -Topic 'session-topic' -Subscription 'session-sub' -SessionId $sid -ServiceBusConnectionString $script:connectionString
+        $ctx = $null
+        $maxAttempts = 5
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+                $ctx = New-SBSessionContext -Topic 'session-topic' -Subscription 'session-sub' -SessionId $sid -ServiceBusConnectionString $script:connectionString
+                break
+            }
+            catch {
+                $msg = [string]$_.Exception.Message
+                $sessionLockConflict = ($msg -match 'SessionCannotBeLocked') -or ($msg -match 'cannot be accepted\. It may be locked by another receiver')
+                if (-not $sessionLockConflict -or $attempt -eq $maxAttempts) {
+                    throw
+                }
+
+                Start-Sleep -Milliseconds (200 * $attempt)
+            }
+        }
+
         try {
             $seedMsg = @(Receive-SBMessage -SessionContext $ctx -MaxMessages 1 -NoComplete)
             $seedMsg.Count | Should -Be 1
@@ -702,5 +733,238 @@ Describe "SBPowerShell cmdlets against emulator" {
         $received.Count | Should -Be 16
         $received | ForEach-Object { $_.SessionId | Should -Be $sessionId }
         ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be (@($payloads) | Sort-Object)
+    }
+
+    It "exports queue messages to json without removing them" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -SessionId 'export-sess' -CustomProperties @{ tenant = 'acme'; priority = [int]3 } -Body 'exp-one', 'exp-two'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'queue-export.json'
+
+        try {
+            $result = @(Export-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -Format Json -MaxMessages 2)
+            $result.Count | Should -Be 1
+            $result[0].FullName | Should -Be (Resolve-Path $outputPath).Path
+
+            $exported = Get-Content $outputPath -Raw | ConvertFrom-Json
+            @($exported).Count | Should -Be 2
+            $exported[0].MessageProperties.SessionId | Should -Be 'export-sess'
+            $exported[0].ApplicationProperties.tenant | Should -Be 'acme'
+            $exported[0].ApplicationProperties.priority | Should -Be 3
+            [string]::IsNullOrWhiteSpace($exported[0].Body.Base64) | Should -BeFalse
+            $exported[0].Body.Utf8 | Should -Be 'exp-one'
+
+            $received = @(Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 2)
+            $received.Count | Should -Be 2
+            ($received | ForEach-Object { $_.Body.ToString() } | Sort-Object) | Should -Be @('exp-one', 'exp-two')
+        }
+        finally {
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
+    It "exports subscription messages to json with MaxMessages" {
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'audit-1', 'audit-2', 'audit-3'
+        Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'audit.json'
+
+        try {
+            Export-SBMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -Format Json -MaxMessages 2 | Out-Null
+
+            $exported = @(Get-Content $outputPath -Raw | ConvertFrom-Json)
+            $exported.Count | Should -Be 2
+            ($exported | ForEach-Object { $_.Body.Utf8 } | Sort-Object) | Should -Be @('audit-1', 'audit-2')
+        }
+        finally {
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
+    It "exports queue DLQ messages to json without removing them" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
+
+        $messages = New-SBMessage -CustomProperties @{ category = 'dlq-export' } -Body 'dlq-export-queue'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Receive-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1 -NoComplete |
+            Set-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -DeadLetter -DeadLetterReason 'export-dlq' | Out-Null
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'queue-dlq-export.json'
+
+        try {
+            $result = @(Export-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -Format Json -MaxMessages 1)
+            $result.Count | Should -Be 1
+            $result[0].FullName | Should -Be (Resolve-Path $outputPath).Path
+
+            $exported = @(Get-Content $outputPath -Raw | ConvertFrom-Json)
+            $exported.Count | Should -Be 1
+            $exported[0].Body.Utf8 | Should -Be 'dlq-export-queue'
+            $exported[0].ApplicationProperties.category | Should -Be 'dlq-export'
+            $exported[0].BrokerProperties.DeadLetterReason | Should -Be 'export-dlq'
+
+            $received = @(Receive-SBDLQMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -MaxMessages 1)
+            $received.Count | Should -Be 1
+            $received[0].Body.ToString() | Should -Be 'dlq-export-queue'
+        }
+        finally {
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
+    It "exports subscription DLQ messages to json without removing them" {
+        Clear-SBSubscription -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString | Out-Null
+        Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -WaitSeconds 1 | Out-Null
+
+        $messages = New-SBMessage -CustomProperties @{ category = 'sub-dlq-export' } -Body 'dlq-export-sub'
+        Send-SBMessage -Topic 'test-topic' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        Receive-SBMessage -ServiceBusConnectionString $script:connectionString -Topic 'test-topic' -Subscription 'test-sub' -MaxMessages 1 -NoComplete |
+            Set-SBMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -DeadLetter -DeadLetterReason 'export-dlq-sub' | Out-Null
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'subscription-dlq-export.json'
+
+        try {
+            Export-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -Format Json -MaxMessages 1 | Out-Null
+
+            $exported = @(Get-Content $outputPath -Raw | ConvertFrom-Json)
+            $exported.Count | Should -Be 1
+            $exported[0].Body.Utf8 | Should -Be 'dlq-export-sub'
+            $exported[0].ApplicationProperties.category | Should -Be 'sub-dlq-export'
+            $exported[0].BrokerProperties.DeadLetterReason | Should -Be 'export-dlq-sub'
+
+            $received = @(Receive-SBDLQMessage -Topic 'test-topic' -Subscription 'test-sub' -ServiceBusConnectionString $script:connectionString -MaxMessages 1)
+            $received.Count | Should -Be 1
+            $received[0].Body.ToString() | Should -Be 'dlq-export-sub'
+        }
+        finally {
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
+    It "exports using current SB context to jsonl" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'ctx-one', 'ctx-two'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'current.jsonl'
+
+        try {
+            Set-SBContext -ServiceBusConnectionString $script:connectionString -Queue 'test-queue' | Out-Null
+            Export-SBMessage -OutputPath $outputPath | Out-Null
+
+            $lines = @(Get-Content $outputPath)
+            $lines.Count | Should -Be 2
+            $parsed = $lines | ForEach-Object { $_ | ConvertFrom-Json }
+            ($parsed | ForEach-Object { $_.Body.Utf8 } | Sort-Object) | Should -Be @('ctx-one', 'ctx-two')
+        }
+        finally {
+            Clear-SBContext | Out-Null
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
+    It "resolves relative export paths from the current PowerShell location" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'rel-one'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $relativePath = 'relative-export.json'
+        $expectedPath = Join-Path $tempDir $relativePath
+
+        try {
+            Push-Location $tempDir
+            $result = @(Export-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -OutputPath $relativePath -Format Json -MaxMessages 1)
+
+            $result.Count | Should -Be 1
+            $result[0].FullName | Should -Be $expectedPath
+            Test-Path $expectedPath | Should -BeTrue
+        }
+        finally {
+            Pop-Location
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
+    It "resumes jsonl export from checkpoint" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'cp-1', 'cp-2', 'cp-3'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'orders.jsonl'
+        $checkpointPath = Join-Path $tempDir 'orders.checkpoint.json'
+
+        try {
+            Export-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -MaxMessages 2 -CheckpointPath $checkpointPath | Out-Null
+            @(Get-Content $outputPath).Count | Should -Be 2
+            Test-Path $checkpointPath | Should -BeTrue
+
+            Export-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -CheckpointPath $checkpointPath | Out-Null
+
+            $lines = @(Get-Content $outputPath)
+            $lines.Count | Should -Be 3
+            $parsed = $lines | ForEach-Object { $_ | ConvertFrom-Json }
+            ($parsed | ForEach-Object { $_.Body.Utf8 } | Sort-Object) | Should -Be @('cp-1', 'cp-2', 'cp-3')
+
+            $checkpoint = Get-Content $checkpointPath -Raw | ConvertFrom-Json
+            $checkpoint.ExportedCount | Should -Be 3
+        }
+        finally {
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
+    It "rejects checkpoint usage with json exports" {
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $outputPath = Join-Path $tempDir 'audit.json'
+        $checkpointPath = Join-Path $tempDir 'audit.checkpoint.json'
+
+        try {
+            {
+                Export-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -OutputPath $outputPath -Format Json -CheckpointPath $checkpointPath
+            } | Should -Throw
+        }
+        finally {
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
     }
 }

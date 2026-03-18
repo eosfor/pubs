@@ -14,16 +14,18 @@ Creates Service Bus SBAuthorizationRule operations.
 
 ### Queue
 ```
-New-SBAuthorizationRule -ServiceBusConnectionString <String> -Queue <String> [-Rule] <String>
- -Rights <AccessRights[]> [-PrimaryKey <String>] [-SecondaryKey <String>] [-ProgressAction <ActionPreference>]
- [-WhatIf] [-Confirm] [<CommonParameters>]
+New-SBAuthorizationRule [-Queue <String>] [-Rule] <String> -Rights <AccessRights[]> [-PrimaryKey <String>]
+ [-SecondaryKey <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
 ```
 
 ### Topic
 ```
-New-SBAuthorizationRule -ServiceBusConnectionString <String> -Topic <String> [-Rule] <String>
- -Rights <AccessRights[]> [-PrimaryKey <String>] [-SecondaryKey <String>] [-ProgressAction <ActionPreference>]
- [-WhatIf] [-Confirm] [<CommonParameters>]
+New-SBAuthorizationRule [-Topic <String>] [-Rule] <String> -Rights <AccessRights[]> [-PrimaryKey <String>]
+ [-SecondaryKey <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -35,14 +37,14 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ### Example 1 (Queue)
 ```powershell
-PS C:\\> New-SBAuthorizationRule -Queue '<queue-name>' -Rights @('Listen','Send') -ServiceBusConnectionString '<connection-string>' -Rule '<rule-name>'
+PS C:\\> New-SBAuthorizationRule -Rights @('Listen','Send') -Rule '<rule-name>'
 ```
 
 Runs New-SBAuthorizationRule using the 'Queue' parameter set.
 
 ### Example 2 (Topic)
 ```powershell
-PS C:\\> New-SBAuthorizationRule -Rights @('Listen','Send') -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>' -Rule '<rule-name>'
+PS C:\\> New-SBAuthorizationRule -Rights @('Listen','Send') -Rule '<rule-name>'
 ```
 
 Runs New-SBAuthorizationRule using the 'Topic' parameter set.
@@ -88,7 +90,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -149,7 +151,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -164,7 +166,7 @@ Type: String
 Parameter Sets: Topic
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -194,6 +196,66 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

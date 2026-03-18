@@ -14,20 +14,23 @@ Updates Service Bus SBSessionState operations.
 
 ### Queue (Default)
 ```
-Set-SBSessionState [-ServiceBusConnectionString <String>] -SessionId <String> -Queue <String> -State <Object>
+Set-SBSessionState -SessionId <String> [-Queue <String>] -State <Object> [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
-Set-SBSessionState [-ServiceBusConnectionString <String>] -SessionId <String> -Topic <String>
- -Subscription <String> -State <Object> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Set-SBSessionState -SessionId <String> [-Topic <String>] [-Subscription <String>] -State <Object>
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
-Set-SBSessionState -State <Object> -SessionContext <SessionContext> [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Set-SBSessionState -State <Object> -SessionContext <SessionContext> [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -46,7 +49,7 @@ Runs Set-SBSessionState using the 'Context' parameter set.
 
 ### Example 2 (Queue)
 ```powershell
-PS C:\\> Set-SBSessionState -Queue '<queue-name>' -SessionId '<session-id>' -State @{ key='value' }
+PS C:\\> Set-SBSessionState -SessionId '<session-id>' -State @{ key='value' }
 ```
 
 Runs Set-SBSessionState using the 'Queue' parameter set.
@@ -62,7 +65,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -74,7 +77,7 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Queue, Subscription
+Parameter Sets: (All)
 Aliases:
 
 Required: False
@@ -137,7 +140,7 @@ Type: String
 Parameter Sets: Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -152,7 +155,7 @@ Type: String
 Parameter Sets: Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -166,6 +169,66 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

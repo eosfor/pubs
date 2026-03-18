@@ -14,23 +14,27 @@ Sends Service Bus SBMessage operations.
 
 ### Topic (Default)
 ```
-Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>]
- [-ServiceBusConnectionString <String>] -Topic <String> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
- [-BatchSize <Int32>] [-PassThru] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>] [-Topic <String>]
+ [-PerSessionThreadAuto] [-PerSessionThread <Int32>] [-BatchSize <Int32>] [-PassThru]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Queue
 ```
-Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>]
- [-ServiceBusConnectionString <String>] -Queue <String> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
- [-BatchSize <Int32>] [-PassThru] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>] [-Queue <String>]
+ [-PerSessionThreadAuto] [-PerSessionThread <Int32>] [-BatchSize <Int32>] [-PassThru]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
 Send-SBMessage [-Message <PSMessage[]>] [-ReceivedInputObject <ServiceBusReceivedMessage[]>] [-Queue <String>]
  [-Topic <String>] -SessionContext <SessionContext> [-PerSessionThreadAuto] [-PerSessionThread <Int32>]
- [-BatchSize <Int32>] [-PassThru] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-BatchSize <Int32>] [-PassThru] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -46,13 +50,6 @@ PS C:\\> Send-SBMessage -SessionContext <SessionContext>
 ```
 
 Runs Send-SBMessage using the 'Context' parameter set.
-
-### Example 2 (Queue)
-```powershell
-PS C:\\> Send-SBMessage -Queue '<queue-name>'
-```
-
-Runs Send-SBMessage using the 'Queue' parameter set.
 
 
 ## PARAMETERS
@@ -107,19 +104,7 @@ Queue name to target.
 
 ```yaml
 Type: String
-Parameter Sets: Queue
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-```yaml
-Type: String
-Parameter Sets: Context
+Parameter Sets: Queue, Context
 Aliases:
 
 Required: False
@@ -149,7 +134,7 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Topic, Queue
+Parameter Sets: (All)
 Aliases:
 
 Required: False
@@ -164,19 +149,7 @@ Topic name to target.
 
 ```yaml
 Type: String
-Parameter Sets: Topic
-Aliases:
-
-Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-```yaml
-Type: String
-Parameter Sets: Context
+Parameter Sets: Topic, Context
 Aliases:
 
 Required: False
@@ -243,6 +216,66 @@ Required: True
 Position: Named
 Default value: None
 Accept pipeline input: True (ByValue)
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
 Accept wildcard characters: False
 ```
 

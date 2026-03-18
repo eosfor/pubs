@@ -14,13 +14,15 @@ Removes Service Bus SBScheduledMessage operations.
 
 ### Queue (Default)
 ```
-Remove-SBScheduledMessage -ServiceBusConnectionString <String> -Queue <String> -SequenceNumber <Int64[]>
+Remove-SBScheduledMessage [-Queue <String>] -SequenceNumber <Int64[]> [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ### Topic
 ```
-Remove-SBScheduledMessage -ServiceBusConnectionString <String> -Topic <String> -SequenceNumber <Int64[]>
+Remove-SBScheduledMessage [-Topic <String>] -SequenceNumber <Int64[]> [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
  [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -33,14 +35,14 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ### Example 1 (Queue)
 ```powershell
-PS C:\\> Remove-SBScheduledMessage -Queue '<queue-name>' -SequenceNumber @(1) -ServiceBusConnectionString '<connection-string>'
+PS C:\\> Remove-SBScheduledMessage -SequenceNumber @(1)
 ```
 
 Runs Remove-SBScheduledMessage using the 'Queue' parameter set.
 
 ### Example 2 (Topic)
 ```powershell
-PS C:\\> Remove-SBScheduledMessage -SequenceNumber @(1) -ServiceBusConnectionString '<connection-string>' -Topic '<topic-name>'
+PS C:\\> Remove-SBScheduledMessage -SequenceNumber @(1)
 ```
 
 Runs Remove-SBScheduledMessage using the 'Topic' parameter set.
@@ -71,7 +73,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -101,7 +103,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -116,7 +118,7 @@ Type: String
 Parameter Sets: Topic
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -146,6 +148,66 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

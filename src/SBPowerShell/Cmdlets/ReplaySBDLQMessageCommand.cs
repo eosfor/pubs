@@ -6,26 +6,22 @@ namespace SBPowerShell.Cmdlets;
 
 [Cmdlet("Replay", "SBDLQMessage", DefaultParameterSetName = ParameterSetQueue)]
 [OutputType(typeof(ServiceBusReceivedMessage))]
-public sealed class ReplaySBDLQMessageCommand : PSCmdlet
+public sealed class ReplaySBDLQMessageCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
 
     private readonly List<ServiceBusReceivedMessage> _input = [];
 
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -58,6 +54,9 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
     [Parameter(ValueFromPipeline = true)]
     public ServiceBusReceivedMessage[]? Message { get; set; }
 
+    private string _resolvedConnectionString = string.Empty;
+    private ResolvedEntity _resolvedTarget;
+
     protected override void ProcessRecord()
     {
         if (Message is { Length: > 0 })
@@ -70,6 +69,13 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
     {
         try
         {
+            _resolvedConnectionString = ResolveConnectionString();
+            _resolvedTarget = ResolveQueueOrSubscriptionTarget(
+                Queue,
+                Topic,
+                Subscription,
+                resolvedConnectionString: _resolvedConnectionString);
+
             var destination = ResolveDestination();
             var messages = _input.Count > 0 ? _input : ReadFromDlq();
             if (messages.Count == 0)
@@ -91,6 +97,11 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ReplaySBDLQMessageFailed", ErrorCategory.NotSpecified, this));
         }
     }
@@ -113,16 +124,16 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
         var messages = new List<ServiceBusReceivedMessage>();
         var subQueue = ServiceBusSubQueuePath.ResolveSubQueue(TransferDeadLetter);
 
-        var client = new ServiceBusClient(ServiceBusConnectionString);
+        var client = CreateServiceBusClient(_resolvedConnectionString);
         try
         {
-            if (ParameterSetName == ParameterSetQueue)
+            if (_resolvedTarget.Kind == ResolvedEntityKind.Queue)
             {
-                ReadQueueDlq(client, messages, subQueue);
+                ReadQueueDlq(client, _resolvedTarget.Queue, messages, subQueue);
             }
             else
             {
-                ReadSubscriptionDlq(client, messages, subQueue);
+                ReadSubscriptionDlq(client, _resolvedTarget.Topic, _resolvedTarget.Subscription, messages, subQueue);
             }
         }
         finally
@@ -133,11 +144,11 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
         return messages;
     }
 
-    private void ReadQueueDlq(ServiceBusClient client, List<ServiceBusReceivedMessage> messages, SubQueue subQueue)
+    private void ReadQueueDlq(ServiceBusClient client, string queue, List<ServiceBusReceivedMessage> messages, SubQueue subQueue)
     {
         try
         {
-            var receiver = client.CreateReceiver(Queue, new ServiceBusReceiverOptions { SubQueue = subQueue });
+            var receiver = client.CreateReceiver(queue, new ServiceBusReceiverOptions { SubQueue = subQueue });
             try
             {
                 DrainReceiver(receiver, messages);
@@ -149,17 +160,17 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
         }
         catch (InvalidOperationException)
         {
-            var queuePath = ServiceBusSubQueuePath.BuildQueueEntityPath(Queue);
+            var queuePath = ServiceBusSubQueuePath.BuildQueueEntityPath(queue);
             var sessionPath = ServiceBusSubQueuePath.BuildSessionPath(queuePath, subQueue);
             DrainSessionPath(client, sessionPath, messages);
         }
     }
 
-    private void ReadSubscriptionDlq(ServiceBusClient client, List<ServiceBusReceivedMessage> messages, SubQueue subQueue)
+    private void ReadSubscriptionDlq(ServiceBusClient client, string topic, string subscription, List<ServiceBusReceivedMessage> messages, SubQueue subQueue)
     {
         try
         {
-            var receiver = client.CreateReceiver(Topic, Subscription, new ServiceBusReceiverOptions { SubQueue = subQueue });
+            var receiver = client.CreateReceiver(topic, subscription, new ServiceBusReceiverOptions { SubQueue = subQueue });
             try
             {
                 DrainReceiver(receiver, messages);
@@ -171,7 +182,7 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
         }
         catch (InvalidOperationException)
         {
-            var entityPath = ServiceBusSubQueuePath.BuildSubscriptionEntityPath(Topic, Subscription);
+            var entityPath = ServiceBusSubQueuePath.BuildSubscriptionEntityPath(topic, subscription);
             var sessionPath = ServiceBusSubQueuePath.BuildSessionPath(entityPath, subQueue);
             DrainSessionPath(client, sessionPath, messages);
         }
@@ -229,7 +240,7 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
 
     private void ReplayToDestination(IReadOnlyList<ServiceBusReceivedMessage> messages, string destination)
     {
-        var client = new ServiceBusClient(ServiceBusConnectionString);
+        var client = CreateServiceBusClient(_resolvedConnectionString);
         try
         {
             var sender = client.CreateSender(destination);
@@ -254,7 +265,7 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
     private void CompleteSourceMessages(IReadOnlyList<ServiceBusReceivedMessage> messages)
     {
         var subQueue = ServiceBusSubQueuePath.ResolveSubQueue(TransferDeadLetter);
-        var client = new ServiceBusClient(ServiceBusConnectionString);
+        var client = CreateServiceBusClient(_resolvedConnectionString);
         try
         {
             var nonSession = messages.Where(m => string.IsNullOrEmpty(m.SessionId)).ToList();
@@ -262,9 +273,9 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
 
             if (nonSession.Count > 0)
             {
-                var receiver = ParameterSetName == ParameterSetQueue
-                    ? client.CreateReceiver(Queue, new ServiceBusReceiverOptions { SubQueue = subQueue })
-                    : client.CreateReceiver(Topic, Subscription, new ServiceBusReceiverOptions { SubQueue = subQueue });
+                var receiver = _resolvedTarget.Kind == ResolvedEntityKind.Queue
+                    ? client.CreateReceiver(_resolvedTarget.Queue, new ServiceBusReceiverOptions { SubQueue = subQueue })
+                    : client.CreateReceiver(_resolvedTarget.Topic, _resolvedTarget.Subscription, new ServiceBusReceiverOptions { SubQueue = subQueue });
 
                 try
                 {
@@ -282,14 +293,14 @@ public sealed class ReplaySBDLQMessageCommand : PSCmdlet
             foreach (var group in sessionGroups)
             {
                 ServiceBusSessionReceiver sessionReceiver;
-                if (ParameterSetName == ParameterSetQueue)
+                if (_resolvedTarget.Kind == ResolvedEntityKind.Queue)
                 {
-                    var path = ServiceBusSubQueuePath.BuildSessionPath(ServiceBusSubQueuePath.BuildQueueEntityPath(Queue), subQueue);
+                    var path = ServiceBusSubQueuePath.BuildSessionPath(ServiceBusSubQueuePath.BuildQueueEntityPath(_resolvedTarget.Queue), subQueue);
                     sessionReceiver = client.AcceptSessionAsync(path, group.Key, cancellationToken: default).GetAwaiter().GetResult();
                 }
                 else
                 {
-                    var path = ServiceBusSubQueuePath.BuildSessionPath(ServiceBusSubQueuePath.BuildSubscriptionEntityPath(Topic, Subscription), subQueue);
+                    var path = ServiceBusSubQueuePath.BuildSessionPath(ServiceBusSubQueuePath.BuildSubscriptionEntityPath(_resolvedTarget.Topic, _resolvedTarget.Subscription), subQueue);
                     sessionReceiver = client.AcceptSessionAsync(path, group.Key, cancellationToken: default).GetAwaiter().GetResult();
                 }
 

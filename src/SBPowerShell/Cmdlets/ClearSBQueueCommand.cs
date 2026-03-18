@@ -7,14 +7,10 @@ using Azure.Messaging.ServiceBus;
 
 namespace SBPowerShell.Cmdlets;
 
-[Cmdlet(VerbsCommon.Clear, "SBQueue")]
-public sealed class ClearSBQueueCommand : PSCmdlet
+[Cmdlet(VerbsCommon.Clear, "SBQueue", SupportsShouldProcess = true)]
+public sealed class ClearSBQueueCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
@@ -30,32 +26,46 @@ public sealed class ClearSBQueueCommand : PSCmdlet
     {
         try
         {
-            ClearQueueAsync().GetAwaiter().GetResult();
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueTarget(Queue);
+            var targetText = $"Queue '{target.Queue}' (from {target.Source})";
+
+            if (!ShouldProcess(targetText, "Clear Service Bus queue"))
+            {
+                return;
+            }
+
+            ClearQueueAsync(connectionString, target.Queue).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ClearSBQueueFailed", ErrorCategory.NotSpecified, Queue));
         }
     }
 
-    private async Task ClearQueueAsync()
+    private async Task ClearQueueAsync(string connectionString, string queue)
     {
-        await using var client = new ServiceBusClient(ServiceBusConnectionString);
+        await using var client = CreateServiceBusClient(connectionString);
 
         try
         {
-            await ClearNonSessionQueueAsync(client);
+            await ClearNonSessionQueueAsync(client, queue);
         }
         catch (InvalidOperationException)
         {
             // Queue likely requires sessions; fall back to session receivers.
-            await ClearSessionQueueAsync(client);
+            await ClearSessionQueueAsync(client, queue);
         }
     }
 
-    private async Task ClearNonSessionQueueAsync(ServiceBusClient client)
+    private async Task ClearNonSessionQueueAsync(ServiceBusClient client, string queue)
     {
-        await using var receiver = client.CreateReceiver(Queue);
+        await using var receiver = client.CreateReceiver(queue);
         var receiveTimeout = TimeSpan.FromSeconds(Math.Max(WaitSeconds, 1) + 5);
 
         while (true)
@@ -79,12 +89,19 @@ public sealed class ClearSBQueueCommand : PSCmdlet
 
             foreach (var message in messages)
             {
-                await receiver.CompleteMessageAsync(message);
+                try
+                {
+                    await receiver.CompleteMessageAsync(message);
+                }
+                catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessageLockLost)
+                {
+                    // Best-effort draining: message is no longer lockable by this receiver.
+                }
             }
         }
     }
 
-    private async Task ClearSessionQueueAsync(ServiceBusClient client)
+    private async Task ClearSessionQueueAsync(ServiceBusClient client, string queue)
     {
         while (true)
         {
@@ -93,44 +110,62 @@ public sealed class ClearSBQueueCommand : PSCmdlet
             ServiceBusSessionReceiver? sessionReceiver;
             try
             {
-                sessionReceiver = await client.AcceptNextSessionAsync(Queue, cancellationToken: cts.Token);
+                sessionReceiver = await client.AcceptNextSessionAsync(queue, cancellationToken: cts.Token);
             }
             catch (TaskCanceledException)
             {
                 // No more sessions available within wait window.
                 break;
             }
-        if (sessionReceiver is null)
-        {
-            break;
-        }
 
-        await using (sessionReceiver)
-        {
-            var receiveTimeout = TimeSpan.FromSeconds(Math.Max(WaitSeconds, 1) + 5);
-
-            while (true)
+            if (sessionReceiver is null)
             {
-                IReadOnlyList<ServiceBusReceivedMessage> messages;
-                try
-                {
-                    messages = await sessionReceiver
-                        .ReceiveMessagesAsync(BatchSize, TimeSpan.FromSeconds(WaitSeconds))
-                        .WaitAsync(receiveTimeout);
-                }
-                catch (TimeoutException)
-                {
-                    break;
-                }
+                break;
+            }
 
-                if (messages.Count == 0)
-                {
-                    break;
-                }
+            await using (sessionReceiver)
+            {
+                var receiveTimeout = TimeSpan.FromSeconds(Math.Max(WaitSeconds, 1) + 5);
 
+                while (true)
+                {
+                    IReadOnlyList<ServiceBusReceivedMessage> messages;
+                    try
+                    {
+                        messages = await sessionReceiver
+                            .ReceiveMessagesAsync(BatchSize, TimeSpan.FromSeconds(WaitSeconds))
+                            .WaitAsync(receiveTimeout);
+                    }
+                    catch (TimeoutException)
+                    {
+                        break;
+                    }
+
+                    if (messages.Count == 0)
+                    {
+                        break;
+                    }
+
+                    var sessionLockLost = false;
                     foreach (var message in messages)
                     {
-                        await sessionReceiver.CompleteMessageAsync(message);
+                        try
+                        {
+                            await sessionReceiver.CompleteMessageAsync(message);
+                        }
+                        catch (ServiceBusException ex) when (
+                            ex.Reason == ServiceBusFailureReason.MessageLockLost ||
+                            ex.Reason == ServiceBusFailureReason.SessionLockLost)
+                        {
+                            // Session lock can expire while draining; continue with next session.
+                            sessionLockLost = true;
+                            break;
+                        }
+                    }
+
+                    if (sessionLockLost)
+                    {
+                        break;
                     }
                 }
             }

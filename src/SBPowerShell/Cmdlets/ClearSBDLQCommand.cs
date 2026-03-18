@@ -5,24 +5,20 @@ using Azure.Messaging.ServiceBus;
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Clear, "SBDLQ")]
-public sealed class ClearSBDLQCommand : PSCmdlet
+public sealed class ClearSBDLQCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
 
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetQueue)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -41,26 +37,37 @@ public sealed class ClearSBDLQCommand : PSCmdlet
     {
         try
         {
-            ClearAsync().GetAwaiter().GetResult();
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueOrSubscriptionTarget(
+                Queue,
+                Topic,
+                Subscription,
+                resolvedConnectionString: connectionString);
+            ClearAsync(connectionString, target).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ClearSBDLQFailed", ErrorCategory.NotSpecified, this));
         }
     }
 
-    private async Task ClearAsync()
+    private async Task ClearAsync(string connectionString, ResolvedEntity target)
     {
-        await using var client = new ServiceBusClient(ServiceBusConnectionString);
+        await using var client = CreateServiceBusClient(connectionString);
         var subQueue = ServiceBusSubQueuePath.ResolveSubQueue(TransferDeadLetter);
 
-        if (ParameterSetName == ParameterSetQueue)
+        if (target.Kind == ResolvedEntityKind.Queue)
         {
-            await ClearEntityAsync(client, Queue, null, subQueue);
+            await ClearEntityAsync(client, target.Queue, null, subQueue);
         }
         else
         {
-            await ClearEntityAsync(client, Topic, Subscription, subQueue);
+            await ClearEntityAsync(client, target.Topic, target.Subscription, subQueue);
         }
     }
 

@@ -4,30 +4,30 @@ using SBPowerShell.Models;
 
 namespace SBPowerShell.Cmdlets;
 
-[Cmdlet(VerbsCommon.New, "SBSessionContext", DefaultParameterSetName = ParameterSetQueue)]
+[Cmdlet(VerbsCommon.New, "SBSessionContext", DefaultParameterSetName = ParameterSetContextDefaults)]
 [OutputType(typeof(SessionContext))]
-public sealed class NewSBSessionContextCommand : PSCmdlet
+public sealed class NewSBSessionContextCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
-
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
+    private const string ParameterSetContextDefaults = "ContextDefaults";
 
     [Parameter(Mandatory = true)]
     [ValidateNotNullOrEmpty]
     public string SessionId { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetContextDefaults)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetContextDefaults)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetContextDefaults)]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -35,33 +35,43 @@ public sealed class NewSBSessionContextCommand : PSCmdlet
     {
         try
         {
-            var client = new ServiceBusClient(ServiceBusConnectionString);
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueOrSubscriptionTarget(Queue, Topic, Subscription, resolvedConnectionString: connectionString);
+            var clientHandle = CreateServiceBusClientWithTransport(connectionString);
+            var client = clientHandle.Client;
 
-            ServiceBusSessionReceiver receiver = ParameterSetName == ParameterSetQueue
-                ? client.AcceptSessionAsync(Queue, SessionId).GetAwaiter().GetResult()
-                : client.AcceptSessionAsync(Topic, Subscription, SessionId).GetAwaiter().GetResult();
+            ServiceBusSessionReceiver receiver = target.Kind == ResolvedEntityKind.Queue
+                ? client.AcceptSessionAsync(target.Queue, SessionId).GetAwaiter().GetResult()
+                : client.AcceptSessionAsync(target.Topic, target.Subscription, SessionId).GetAwaiter().GetResult();
 
-            var entityPath = ParameterSetName == ParameterSetQueue ? Queue : $"{Topic}/Subscriptions/{Subscription}";
-            var ctx = ParameterSetName == ParameterSetQueue
+            var entityPath = target.Kind == ResolvedEntityKind.Queue ? target.Queue : $"{target.Topic}/Subscriptions/{target.Subscription}";
+            var ctx = target.Kind == ResolvedEntityKind.Queue
                 ? new SessionContext(
-                    ServiceBusConnectionString,
+                    connectionString,
                     entityPath,
                     SessionId,
                     client,
                     receiver,
-                    queueName: Queue)
+                    clientHandle.TransportType,
+                    queueName: target.Queue)
                 : new SessionContext(
-                    ServiceBusConnectionString,
+                    connectionString,
                     entityPath,
                     SessionId,
                     client,
                     receiver,
-                    topicName: Topic,
-                    subscriptionName: Subscription);
+                    clientHandle.TransportType,
+                    topicName: target.Topic,
+                    subscriptionName: target.Subscription);
             WriteObject(ctx);
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "NewSBSessionContextFailed", ErrorCategory.NotSpecified, this));
         }
     }

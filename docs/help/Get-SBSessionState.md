@@ -14,26 +14,31 @@ Reads and returns Service Bus SBSessionState operations.
 
 ### Queue (Default)
 ```
-Get-SBSessionState -ServiceBusConnectionString <String> -SessionId <String> -Queue <String> [-AsString]
+Get-SBSessionState -SessionId <String> -Queue <String> [-AsString] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Subscription
 ```
-Get-SBSessionState -ServiceBusConnectionString <String> -SessionId <String> -Topic <String>
- -Subscription <String> [-AsString] [-ProgressAction <ActionPreference>] [<CommonParameters>]
-```
-
-### SessionInfo
-```
-Get-SBSessionState -ServiceBusConnectionString <String> -InputObject <SBSessionInfo> [-AsString]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBSessionState -SessionId <String> -Topic <String> -Subscription <String> [-AsString]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### Context
 ```
-Get-SBSessionState [-ServiceBusConnectionString <String>] [-InputObject <SBSessionInfo>] [-AsString]
- -SessionContext <SessionContext> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-SBSessionState [-Queue <String>] [-Topic <String>] [-Subscription <String>] [-InputObject <SBSessionInfo>]
+ [-AsString] -SessionContext <SessionContext> [-ServiceBusConnectionString <String>] [-Context <SBContext>]
+ [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
+```
+
+### SessionInfo
+```
+Get-SBSessionState -InputObject <SBSessionInfo> [-AsString] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -52,7 +57,7 @@ Runs Get-SBSessionState using the 'Context' parameter set.
 
 ### Example 2 (Queue)
 ```powershell
-PS C:\\> Get-SBSessionState -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>' -SessionId '<session-id>'
+PS C:\\> Get-SBSessionState -Queue '<queue-name>' -SessionId '<session-id>'
 ```
 
 Runs Get-SBSessionState using the 'Queue' parameter set.
@@ -90,24 +95,24 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -ServiceBusConnectionString
-Connection string for the target Service Bus namespace or emulator.
-
 ```yaml
 Type: String
-Parameter Sets: Queue, Subscription, SessionInfo
+Parameter Sets: Context
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -ServiceBusConnectionString
+Connection string for the target Service Bus namespace or emulator.
+
 ```yaml
 Type: String
-Parameter Sets: Context
+Parameter Sets: (All)
 Aliases:
 
 Required: False
@@ -162,6 +167,18 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+```yaml
+Type: String
+Parameter Sets: Context
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -Topic
 Topic name to target.
 
@@ -171,6 +188,18 @@ Parameter Sets: Subscription
 Aliases:
 
 Required: True
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+```yaml
+Type: String
+Parameter Sets: Context
+Aliases:
+
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -197,6 +226,18 @@ Specifies the InputObject value for this command.
 
 ```yaml
 Type: SBSessionInfo
+Parameter Sets: Context
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: True (ByValue)
+Accept wildcard characters: False
+```
+
+```yaml
+Type: SBSessionInfo
 Parameter Sets: SessionInfo
 Aliases:
 
@@ -207,15 +248,63 @@ Accept pipeline input: True (ByValue)
 Accept wildcard characters: False
 ```
 
+### -Context
+Specifies the Context value for this command.
+
 ```yaml
-Type: SBSessionInfo
-Parameter Sets: Context
+Type: SBContext
+Parameter Sets: (All)
 Aliases:
 
 Required: False
 Position: Named
 Default value: None
-Accept pipeline input: True (ByValue)
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
 Accept wildcard characters: False
 ```
 

@@ -2,21 +2,16 @@ using System.Text.Json;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
 using SBPowerShell.Models;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsData.Import, "SBTopology", SupportsShouldProcess = true)]
-public sealed class ImportSBTopologyCommand : PSCmdlet
+public sealed class ImportSBTopologyCommand : SBContextAwareCmdletBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
     };
-
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, Position = 0)]
     [ValidateNotNullOrEmpty]
@@ -35,13 +30,19 @@ public sealed class ImportSBTopologyCommand : PSCmdlet
             var snapshot = JsonSerializer.Deserialize<TopologySnapshot>(json, JsonOptions)
                 ?? throw new InvalidOperationException("Topology file is empty or invalid.");
 
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
+            var connectionString = ResolveConnectionString();
+            var admin = CreateAdminClient(connectionString);
 
             ImportQueues(admin, snapshot.Queues);
             ImportTopics(admin, snapshot.Topics);
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ImportSBTopologyFailed", ErrorCategory.NotSpecified, Path));
         }
     }

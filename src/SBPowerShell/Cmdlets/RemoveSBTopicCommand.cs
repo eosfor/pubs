@@ -1,17 +1,12 @@
 using System;
 using System.Management.Automation;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Remove, "SBTopic", SupportsShouldProcess = true, ConfirmImpact = ConfirmImpact.High)]
-public sealed class RemoveSBTopicCommand : PSCmdlet
+public sealed class RemoveSBTopicCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidateNotNullOrEmpty]
     [Alias("Name", "TopicName")]
     public string Topic { get; set; } = string.Empty;
@@ -21,24 +16,32 @@ public sealed class RemoveSBTopicCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        if (!Force && !ShouldContinue($"Remove topic '{Topic}'?", "Confirm topic deletion"))
+        var connectionString = ResolveConnectionString();
+        var target = ResolveTopicTarget(Topic, resolvedConnectionString: connectionString);
+
+        if (!Force && !ShouldContinue($"Remove topic '{target.Topic}'?", "Confirm topic deletion"))
         {
             return;
         }
 
-        if (!ShouldProcess(Topic, "Delete Service Bus topic"))
+        if (!ShouldProcess($"Topic '{target.Topic}' (from {target.Source})", "Delete Service Bus topic"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            admin.DeleteTopicAsync(Topic).GetAwaiter().GetResult();
+            var admin = CreateAdminClient(connectionString);
+            admin.DeleteTopicAsync(target.Topic).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            ThrowTerminatingError(new ErrorRecord(ex, "RemoveSBTopicFailed", ErrorCategory.NotSpecified, Topic));
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
+            ThrowTerminatingError(new ErrorRecord(ex, "RemoveSBTopicFailed", ErrorCategory.NotSpecified, target.Topic));
         }
     }
 }

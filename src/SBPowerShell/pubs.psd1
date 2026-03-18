@@ -36,6 +36,8 @@
         'New-SBMessage',
         'Send-SBMessage',
         'Receive-SBMessage',
+        'Export-SBMessage',
+        'Export-SBDLQMessage',
         'Receive-SBDLQMessage',
         'Receive-SBDeferredMessage',
         'Set-SBMessage',
@@ -76,7 +78,10 @@
         'Get-SBConnectionString',
         'Set-SBEntityStatus',
         'Export-SBTopology',
-        'Import-SBTopology'
+        'Import-SBTopology',
+        'Set-SBContext',
+        'Get-SBContext',
+        'Clear-SBContext'
     )
 
     # Variables to export from this module

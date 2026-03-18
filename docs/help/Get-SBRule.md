@@ -14,13 +14,15 @@ Reads and returns Service Bus SBRule operations.
 
 ### All (Default)
 ```
-Get-SBRule -ServiceBusConnectionString <String> -Topic <String> -Subscription <String>
+Get-SBRule [-Topic <String>] [-Subscription <String>] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ### ByName
 ```
-Get-SBRule -ServiceBusConnectionString <String> -Topic <String> -Subscription <String> [[-Rule] <String>]
+Get-SBRule [-Topic <String>] [-Subscription <String>] [[-Rule] <String>] [-ServiceBusConnectionString <String>]
+ [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -31,20 +33,12 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ## EXAMPLES
 
-### Example 1 (All)
+### Example 1
 ```powershell
-PS C:\\> Get-SBRule -ServiceBusConnectionString '<connection-string>' -Subscription '<subscription-name>' -Topic '<topic-name>'
+PS C:\\> Get-SBRule
 ```
 
-Runs Get-SBRule using the 'All' parameter set.
-
-### Example 2 (ByName)
-```powershell
-PS C:\\> Get-SBRule -ServiceBusConnectionString '<connection-string>' -Subscription '<subscription-name>' -Topic '<topic-name>'
-```
-
-Runs Get-SBRule using the 'ByName' parameter set.
-
+Runs Get-SBRule with default parameters.
 
 ## PARAMETERS
 
@@ -71,7 +65,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -86,7 +80,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -101,7 +95,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -115,6 +109,66 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

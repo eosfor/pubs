@@ -6,12 +6,14 @@ PowerShell module for Azure Service Bus and local Service Bus Emulator workflows
 - `New-SBMessage` - create message template(s) with SessionId and application properties.
 - `Send-SBMessage` - send to queue or topic; supports per-session parallel sending (`-PerSessionThreadAuto` or `-PerSessionThread`).
 - `Receive-SBMessage` - read from queue or subscription; supports peek (`-Peek`) without removal and `-NoComplete` for manual settlement; automatically switches to a session receiver when the entity requires sessions; supports `-SessionContext` to reuse an open session receiver.
+- `Export-SBMessage` - non-destructive export of active messages to `json` or `jsonl` using `Peek`, including all high-level message fields, application properties, and body.
 - `Receive-SBDLQMessage` - read dead-letter queue/subscription; supports `-Peek`, `-NoComplete`, `-MaxMessages`; automatically switches to session DLQ when needed.
 - `Receive-SBDeferredMessage` - receive deferred messages by SequenceNumber (sessions are supported).
 - `Set-SBMessage` - manually complete/abandon/defer/dead-letter received messages.
 - `New-SBSessionState` - create a strongly typed session state object (DSO) from primitives.
 - `Get-SBSessionState`, `Set-SBSessionState` - read/write session state as DSO (BinaryData transport, JSON under the hood), without PowerShell JSON flattening issues.
 - `New-SBSessionContext`, `Close-SBSessionContext` - open and reuse a session receiver to perform receive/settle/state operations within the same lock.
+- `Set-SBContext`, `Get-SBContext`, `Clear-SBContext` - manage runspace-local default context for implicit connection string and entity target resolution.
 - `Clear-SBQueue`, `Clear-SBSubscription` - clear queue or subscription in batches.
 - `Get-SBTopic` - list topics with SDK metadata (`TopicProperties`) and runtime data.
 - `Get-SBSubscription` - list subscriptions for a topic with metadata (`SubscriptionProperties`) and runtime data, including message counts.
@@ -51,6 +53,16 @@ Install-Module pubs -Scope CurrentUser
 Import-Module pubs
 ```
 
+Install prerelease from PowerShell Gallery:
+```pwsh
+Install-Module pubs -Scope CurrentUser -AllowPrerelease -RequiredVersion 0.1.3-beta1
+
+# Import-Module -RequiredVersion only accepts System.Version (no prerelease suffix),
+# so import by installed module path:
+$beta = Get-InstalledModule pubs -RequiredVersion 0.1.3-beta1
+Import-Module (Join-Path $beta.InstalledLocation "pubs.psd1") -Force
+```
+
 Send and receive:
 ```pwsh
 $conn = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
@@ -66,6 +78,62 @@ Receive-SBMessage -Topic "test-topic" -Subscription "test-sub" -ServiceBusConnec
 
 - For topic send, use `-Topic`. For topic read, use both `-Topic` and `-Subscription`. For queue scenarios, `-Queue` is enough.
 - `-Subscription` is only used when receiving from a topic.
+
+### SBContext (implicit defaults)
+```pwsh
+$conn = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=LocalEmulatorKey123!;UseDevelopmentEmulator=true;"
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+
+# connection string and target are resolved from current SBContext
+Send-SBMessage -Message (New-SBMessage -Body "implicit")
+Receive-SBMessage -MaxMessages 1
+
+# explicit parameters always override context values
+Get-SBQueue -Queue "another-queue"
+
+# clear default context
+Clear-SBContext
+```
+
+Resolution order for context-aware cmdlets:
+- explicit parameters
+- `-SessionContext` / `-Context`
+- current `SBContext` (from `Set-SBContext`)
+
+`-NoContext` disables fallback to current `SBContext` for a single invocation.
+`-IgnoreCertificateChainErrors` (via `Set-SBContext` or per cmdlet) enables a mode where certificate-chain failures emit detailed warnings and can be accepted.
+`-Transport` supports `AmqpTcp` and `AmqpWebSockets`.
+If `-Transport` is not specified, auto mode is used: try AMQP TCP first, then fall back to AMQP WebSockets on TCP probe failure (with warning).
+
+Examples:
+```pwsh
+# 1) Admin-read without explicit connection string
+Set-SBContext -ServiceBusConnectionString $conn
+Get-SBTopic
+
+# 2) Data-plane with queue-only context
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+Send-SBMessage -Message (New-SBMessage -Body "from-context")
+Receive-SBMessage -MaxMessages 1
+
+# 3) Explicit target overrides context target
+Set-SBContext -ServiceBusConnectionString $conn -Queue "queue-a"
+Get-SBQueue -Queue "queue-b"
+
+# 4) Fully deterministic call (no fallback to default context)
+Receive-SBMessage -Queue "test-queue" -NoContext -ServiceBusConnectionString $conn -MaxMessages 1
+
+# 5) Allow invalid chain centrally via SBContext
+Set-SBContext -ServiceBusConnectionString $conn -IgnoreCertificateChainErrors
+Get-SBTopic
+
+# 6) Pin transport in context for all data-plane calls
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue" -Transport AmqpWebSockets
+Send-SBMessage -Message (New-SBMessage -Body "forced-ws")
+
+# 7) Override transport on a single command
+Receive-SBMessage -Queue "test-queue" -ServiceBusConnectionString $conn -Transport AmqpTcp -MaxMessages 1
+```
 
 ### WaitSeconds Behavior
 - `-MaxMessages` and `-WaitSeconds` are mutually exclusive modes (different parameter sets). Use only one in a single call.
@@ -145,6 +213,24 @@ Receive-SBDLQMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBus
 # Without -MaxMessages and -WaitSeconds, the command does continuous polling until cancelled (Ctrl+C).
 # For bounded runs, use either -MaxMessages or -WaitSeconds. Session DLQ is handled automatically.
 ```
+
+Non-destructive export to JSON / JSONL:
+```pwsh
+# Bounded subscription export to JSON
+Export-SBMessage -Topic "sales" -Subscription "audit" -OutputPath "./audit.json" -Format Json -MaxMessages 5000
+
+# Resumable queue export to JSONL with a checkpoint
+Export-SBMessage -Queue "orders" -OutputPath "./orders.jsonl" -FromSequenceNumber 120000 -CheckpointPath "./orders.checkpoint.json"
+
+# Export using the current SBContext
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+Export-SBMessage -OutputPath "./current.jsonl"
+```
+
+Notes:
+- `Export-SBMessage` uses `Peek` only and does not modify broker state.
+- Export includes all high-level `ServiceBusReceivedMessage` fields, `ApplicationProperties`, and body as `Base64` plus best-effort `Utf8`.
+- `CheckpointPath` is supported only for `Jsonl`.
 
 Manual settlement/defer flow:
 ```pwsh
@@ -336,17 +422,23 @@ docker compose -f docker-compose.sbus.yml ps        # check status
 - Integration tests are organized per command: one file per command/group (`tests/SBPowerShell.IntegrationTests/SB*Cmdlet*Tests.cs`), shared infrastructure in `SBCommandTestBase`.
 
 ## Release Pipeline
-- Workflow: `.github/workflows/release-module.yml`
+- Workflows:
+  - `.github/workflows/publish-beta.yml`
+  - `.github/workflows/publish-release.yml`
 - Pipeline steps:
-  - builds module (`Release/net8.0`);
-  - generates markdown help and external help XML (`docs/help` + `en-US/SBPowerShell.dll-Help.xml`);
-  - packs module into zip (`out/pubs.<version>.zip`);
-  - publishes zip to GitHub Releases;
-  - publishes module to PowerShell Gallery.
+  - run full quality gate: build + xUnit + Pester + help generation;
+  - pack module into zip (`out/pubs.<version>.zip`);
+  - publish zip to GitHub Releases;
+  - publish module to PowerShell Gallery (optional via `publish_to_gallery`).
 - Triggers:
-  - push to `main` (auto-publish using module version from `pubs.psd1`);
-  - tag push `v*` (for example `v0.1.2`);
-  - manual run (`workflow_dispatch`).
+  - `publish-beta.yml`: beta tag push `vX.Y.Z-beta.N` or manual run (`workflow_dispatch`);
+  - `publish-release.yml`: stable tag push `vX.Y.Z` or manual run with tag.
+- Versioning (without editing manifest in git):
+  - pipeline updates only the staging manifest in `out/pubs/<version>/pubs.psd1`;
+  - stable: `X.Y.Z`;
+  - beta tag: `X.Y.Z-beta.N`, where `X.Y.Z` must be greater than the latest stable version (typically next patch);
+  - beta in PSGallery: `X.Y.Z-betaN` (`Update-ModuleManifest` prerelease limitation: alphanumeric only);
+  - this avoids stable/beta module-folder collisions for the same base `X.Y.Z`.
 - Required secret:
   - `PSGALLERY_API_KEY` — PowerShell Gallery API key.
 

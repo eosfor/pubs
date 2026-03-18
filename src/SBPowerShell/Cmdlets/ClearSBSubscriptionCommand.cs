@@ -5,17 +5,13 @@ using Azure.Messaging.ServiceBus;
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Clear, "SBSubscription")]
-public sealed class ClearSBSubscriptionCommand : PSCmdlet
+public sealed class ClearSBSubscriptionCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -31,30 +27,37 @@ public sealed class ClearSBSubscriptionCommand : PSCmdlet
     {
         try
         {
-            ClearSubscriptionAsync().GetAwaiter().GetResult();
+            var connectionString = ResolveConnectionString();
+            var target = ResolveSubscriptionTarget(Topic, Subscription, resolvedConnectionString: connectionString);
+            ClearSubscriptionAsync(connectionString, target.Topic, target.Subscription).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ClearSBSubscriptionFailed", ErrorCategory.NotSpecified, Subscription));
         }
     }
 
-    private async Task ClearSubscriptionAsync()
+    private async Task ClearSubscriptionAsync(string connectionString, string topic, string subscription)
     {
-        await using var client = new ServiceBusClient(ServiceBusConnectionString);
+        await using var client = CreateServiceBusClient(connectionString);
 
         try
         {
-            await using var receiver = client.CreateReceiver(Topic, Subscription);
+            await using var receiver = client.CreateReceiver(topic, subscription);
             await DrainReceiverAsync(receiver);
         }
         catch (InvalidOperationException)
         {
-            await ClearSessionSubscriptionAsync(client);
+            await ClearSessionSubscriptionAsync(client, topic, subscription);
         }
     }
 
-    private async Task ClearSessionSubscriptionAsync(ServiceBusClient client)
+    private async Task ClearSessionSubscriptionAsync(ServiceBusClient client, string topic, string subscription)
     {
         while (true)
         {
@@ -62,7 +65,7 @@ public sealed class ClearSBSubscriptionCommand : PSCmdlet
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(WaitSeconds));
-                sessionReceiver = await client.AcceptNextSessionAsync(Topic, Subscription, cancellationToken: cts.Token);
+                sessionReceiver = await client.AcceptNextSessionAsync(topic, subscription, cancellationToken: cts.Token);
             }
             catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.ServiceTimeout)
             {
@@ -90,7 +93,21 @@ public sealed class ClearSBSubscriptionCommand : PSCmdlet
     {
         while (true)
         {
-            var messages = await receiver.ReceiveMessagesAsync(BatchSize, TimeSpan.FromSeconds(WaitSeconds));
+            IReadOnlyList<ServiceBusReceivedMessage> messages;
+            try
+            {
+                messages = await receiver.ReceiveMessagesAsync(BatchSize, TimeSpan.FromSeconds(WaitSeconds));
+            }
+            catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.SessionLockLost)
+            {
+                return;
+            }
+            catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.ServiceCommunicationProblem)
+            {
+                // Connection reset while draining; treat as best-effort completion.
+                return;
+            }
+
             if (messages.Count == 0)
             {
                 break;
@@ -98,7 +115,18 @@ public sealed class ClearSBSubscriptionCommand : PSCmdlet
 
             foreach (var message in messages)
             {
-                await receiver.CompleteMessageAsync(message);
+                try
+                {
+                    await receiver.CompleteMessageAsync(message);
+                }
+                catch (ServiceBusException ex) when (
+                    ex.Reason == ServiceBusFailureReason.MessageLockLost ||
+                    ex.Reason == ServiceBusFailureReason.SessionLockLost ||
+                    ex.Reason == ServiceBusFailureReason.ServiceCommunicationProblem)
+                {
+                    // Best-effort drain for lock-based entities.
+                    return;
+                }
             }
         }
     }

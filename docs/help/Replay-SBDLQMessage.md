@@ -14,18 +14,20 @@ Replays Service Bus SBDLQMessage operations.
 
 ### Queue (Default)
 ```
-Replay-SBDLQMessage -ServiceBusConnectionString <String> -Queue <String> [-DestinationQueue <String>]
- [-DestinationTopic <String>] [-TransferDeadLetter] [-NoCompleteSource] [-MaxMessages <Int32>]
- [-BatchSize <Int32>] [-WaitSeconds <Int32>] [-Message <ServiceBusReceivedMessage[]>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Replay-SBDLQMessage [-Queue <String>] [-DestinationQueue <String>] [-DestinationTopic <String>]
+ [-TransferDeadLetter] [-NoCompleteSource] [-MaxMessages <Int32>] [-BatchSize <Int32>] [-WaitSeconds <Int32>]
+ [-Message <ServiceBusReceivedMessage[]>] [-ServiceBusConnectionString <String>] [-Context <SBContext>]
+ [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Subscription
 ```
-Replay-SBDLQMessage -ServiceBusConnectionString <String> -Topic <String> -Subscription <String>
- [-DestinationQueue <String>] [-DestinationTopic <String>] [-TransferDeadLetter] [-NoCompleteSource]
- [-MaxMessages <Int32>] [-BatchSize <Int32>] [-WaitSeconds <Int32>] [-Message <ServiceBusReceivedMessage[]>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Replay-SBDLQMessage [-Topic <String>] [-Subscription <String>] [-DestinationQueue <String>]
+ [-DestinationTopic <String>] [-TransferDeadLetter] [-NoCompleteSource] [-MaxMessages <Int32>]
+ [-BatchSize <Int32>] [-WaitSeconds <Int32>] [-Message <ServiceBusReceivedMessage[]>]
+ [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext] [-IgnoreCertificateChainErrors]
+ [-Transport <SBTransport>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -35,20 +37,12 @@ Provide -ServiceBusConnectionString where required and target the appropriate qu
 
 ## EXAMPLES
 
-### Example 1 (Queue)
+### Example 1
 ```powershell
-PS C:\\> Replay-SBDLQMessage -Queue '<queue-name>' -ServiceBusConnectionString '<connection-string>'
+PS C:\\> Replay-SBDLQMessage
 ```
 
-Runs Replay-SBDLQMessage using the 'Queue' parameter set.
-
-### Example 2 (Subscription)
-```powershell
-PS C:\\> Replay-SBDLQMessage -ServiceBusConnectionString '<connection-string>' -Subscription '<subscription-name>' -Topic '<topic-name>'
-```
-
-Runs Replay-SBDLQMessage using the 'Subscription' parameter set.
-
+Runs Replay-SBDLQMessage with default parameters.
 
 ## PARAMETERS
 
@@ -150,7 +144,7 @@ Type: String
 Parameter Sets: Queue
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -165,7 +159,7 @@ Type: String
 Parameter Sets: (All)
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -180,7 +174,7 @@ Type: String
 Parameter Sets: Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -195,7 +189,7 @@ Type: String
 Parameter Sets: Subscription
 Aliases:
 
-Required: True
+Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False
@@ -239,6 +233,66 @@ Controls how progress records are handled.
 Type: ActionPreference
 Parameter Sets: (All)
 Aliases: proga
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
+Parameter Sets: (All)
+Aliases:
 
 Required: False
 Position: Named

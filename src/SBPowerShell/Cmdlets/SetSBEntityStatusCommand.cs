@@ -1,30 +1,20 @@
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
-[Cmdlet(VerbsCommon.Set, "SBEntityStatus", DefaultParameterSetName = ParameterSetQueue, SupportsShouldProcess = true)]
-public sealed class SetSBEntityStatusCommand : PSCmdlet
+[Cmdlet(VerbsCommon.Set, "SBEntityStatus", SupportsShouldProcess = true)]
+public sealed class SetSBEntityStatusCommand : SBEntityTargetCmdletBase
 {
-    private const string ParameterSetQueue = "Queue";
-    private const string ParameterSetTopic = "Topic";
-    private const string ParameterSetSubscription = "Subscription";
-
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetTopic)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -36,66 +26,65 @@ public sealed class SetSBEntityStatusCommand : PSCmdlet
     {
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
+            var connectionString = ResolveConnectionString();
             var status = ResolveStatus(Status);
-
-            switch (ParameterSetName)
-            {
-                case ParameterSetQueue:
-                    SetQueueStatus(admin, status);
-                    break;
-                case ParameterSetTopic:
-                    SetTopicStatus(admin, status);
-                    break;
-                case ParameterSetSubscription:
-                    SetSubscriptionStatus(admin, status);
-                    break;
-            }
+            var admin = CreateAdminClient(connectionString);
+            SetAutoResolvedStatus(admin, status, connectionString);
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "SetSBEntityStatusFailed", ErrorCategory.NotSpecified, this));
         }
     }
 
-    private void SetQueueStatus(ServiceBusAdministrationClient admin, EntityStatus status)
+    private void SetAutoResolvedStatus(ServiceBusAdministrationClient admin, EntityStatus status, string connectionString)
     {
-        if (!ShouldProcess(Queue, $"Set status to {Status}"))
+        var target = ResolveQueueTopicOrSubscriptionTarget(
+            Queue,
+            Topic,
+            Subscription,
+            resolvedConnectionString: connectionString);
+
+        if (target.Kind == ResolvedEntityKind.Queue)
+        {
+            if (!ShouldProcess($"Queue '{target.Queue}' (from {target.Source})", $"Set status to {Status}"))
+            {
+                return;
+            }
+
+            var queue = admin.GetQueueAsync(target.Queue).GetAwaiter().GetResult().Value;
+            queue.Status = status;
+            WriteObject(admin.UpdateQueueAsync(queue).GetAwaiter().GetResult().Value);
+            return;
+        }
+
+        if (target.Kind == ResolvedEntityKind.Subscription)
+        {
+            var entityPath = $"{target.Topic}/Subscriptions/{target.Subscription}";
+            if (!ShouldProcess($"Subscription '{entityPath}' (from {target.Source})", $"Set status to {Status}"))
+            {
+                return;
+            }
+
+            var subscription = admin.GetSubscriptionAsync(target.Topic, target.Subscription).GetAwaiter().GetResult().Value;
+            subscription.Status = status;
+            WriteObject(admin.UpdateSubscriptionAsync(subscription).GetAwaiter().GetResult().Value);
+            return;
+        }
+
+        if (!ShouldProcess($"Topic '{target.Topic}' (from {target.Source})", $"Set status to {Status}"))
         {
             return;
         }
 
-        var queue = admin.GetQueueAsync(Queue).GetAwaiter().GetResult().Value;
-        queue.Status = status;
-        var updated = admin.UpdateQueueAsync(queue).GetAwaiter().GetResult().Value;
-        WriteObject(updated);
-    }
-
-    private void SetTopicStatus(ServiceBusAdministrationClient admin, EntityStatus status)
-    {
-        if (!ShouldProcess(Topic, $"Set status to {Status}"))
-        {
-            return;
-        }
-
-        var topic = admin.GetTopicAsync(Topic).GetAwaiter().GetResult().Value;
+        var topic = admin.GetTopicAsync(target.Topic).GetAwaiter().GetResult().Value;
         topic.Status = status;
-        var updated = admin.UpdateTopicAsync(topic).GetAwaiter().GetResult().Value;
-        WriteObject(updated);
-    }
-
-    private void SetSubscriptionStatus(ServiceBusAdministrationClient admin, EntityStatus status)
-    {
-        var entityPath = $"{Topic}/Subscriptions/{Subscription}";
-        if (!ShouldProcess(entityPath, $"Set status to {Status}"))
-        {
-            return;
-        }
-
-        var subscription = admin.GetSubscriptionAsync(Topic, Subscription).GetAwaiter().GetResult().Value;
-        subscription.Status = status;
-        var updated = admin.UpdateSubscriptionAsync(subscription).GetAwaiter().GetResult().Value;
-        WriteObject(updated);
+        WriteObject(admin.UpdateTopicAsync(topic).GetAwaiter().GetResult().Value);
     }
 
     private static EntityStatus ResolveStatus(string value)

@@ -10,26 +10,24 @@ using SBPowerShell.Internal;
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Set, "SBMessage", DefaultParameterSetName = ParameterSetQueue)]
-public sealed class SetSBMessageCommand : PSCmdlet
+public sealed class SetSBMessageCommand : SBSessionAwareCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetSubscription = "Subscription";
     private const string ParameterSetContext = "Context";
 
     [Parameter(ParameterSetName = ParameterSetQueue)]
-    [Parameter(ParameterSetName = ParameterSetSubscription)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Queue { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetContext)]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -97,6 +95,11 @@ public sealed class SetSBMessageCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "SetSBMessageFailed", ErrorCategory.NotSpecified, this));
         }
     }
@@ -123,6 +126,7 @@ public sealed class SetSBMessageCommand : PSCmdlet
 
         if (SessionContext is not null)
         {
+            EnsureSessionContextTargetMatchesExplicit(SessionContext, Queue, Topic, Subscription);
             using var renewer = SessionLockAutoRenewer.Start(SessionContext.Receiver, cancellationToken);
             foreach (var msg in _messages)
             {
@@ -132,12 +136,14 @@ public sealed class SetSBMessageCommand : PSCmdlet
             return settled;
         }
 
-        if (string.IsNullOrWhiteSpace(ServiceBusConnectionString))
-        {
-            throw new ArgumentException("ServiceBusConnectionString is required when SessionContext is not provided.");
-        }
+        var connectionString = ResolveConnectionString();
+        var target = ResolveQueueOrSubscriptionTarget(
+            Queue,
+            Topic,
+            Subscription,
+            resolvedConnectionString: connectionString);
 
-        var client = new ServiceBusClient(ServiceBusConnectionString);
+        var client = CreateServiceBusClient(connectionString);
         try
         {
             var sessionGroups = _messages
@@ -149,7 +155,7 @@ public sealed class SetSBMessageCommand : PSCmdlet
 
             if (nonSessionMessages.Count > 0)
             {
-                await using var receiver = CreateReceiver(client);
+                await using var receiver = CreateReceiver(client, target);
                 foreach (var msg in nonSessionMessages)
                 {
                     await SettleAsync(receiver, msg, action, cancellationToken);
@@ -161,7 +167,7 @@ public sealed class SetSBMessageCommand : PSCmdlet
             {
                 try
                 {
-                    await using var sessionReceiver = await CreateSessionReceiverAsync(client, group.Key, cancellationToken);
+                    await using var sessionReceiver = await CreateSessionReceiverAsync(client, target, group.Key, cancellationToken);
                     using var renewer = SessionLockAutoRenewer.Start(sessionReceiver, cancellationToken);
                     foreach (var msg in group)
                     {
@@ -172,7 +178,7 @@ public sealed class SetSBMessageCommand : PSCmdlet
                 catch (InvalidOperationException)
                 {
                     // Entity is not session-enabled; fall back to non-session receiver even if messages contain SessionId.
-                    await using var receiver = CreateReceiver(client);
+                    await using var receiver = CreateReceiver(client, target);
                     foreach (var msg in group)
                     {
                         await SettleAsync(receiver, msg, action, cancellationToken);
@@ -189,18 +195,18 @@ public sealed class SetSBMessageCommand : PSCmdlet
         return settled;
     }
 
-    private ServiceBusReceiver CreateReceiver(ServiceBusClient client)
+    private ServiceBusReceiver CreateReceiver(ServiceBusClient client, ResolvedEntity target)
     {
-        return ParameterSetName == ParameterSetQueue
-            ? client.CreateReceiver(Queue)
-            : client.CreateReceiver(Topic, Subscription);
+        return target.Kind == ResolvedEntityKind.Queue
+            ? client.CreateReceiver(target.Queue)
+            : client.CreateReceiver(target.Topic, target.Subscription);
     }
 
-    private async Task<ServiceBusSessionReceiver> CreateSessionReceiverAsync(ServiceBusClient client, string sessionId, CancellationToken ct)
+    private async Task<ServiceBusSessionReceiver> CreateSessionReceiverAsync(ServiceBusClient client, ResolvedEntity target, string sessionId, CancellationToken ct)
     {
-        return ParameterSetName == ParameterSetQueue
-            ? await client.AcceptSessionAsync(Queue, sessionId, cancellationToken: ct)
-            : await client.AcceptSessionAsync(Topic, Subscription, sessionId, cancellationToken: ct);
+        return target.Kind == ResolvedEntityKind.Queue
+            ? await client.AcceptSessionAsync(target.Queue, sessionId, cancellationToken: ct)
+            : await client.AcceptSessionAsync(target.Topic, target.Subscription, sessionId, cancellationToken: ct);
     }
 
     private async Task SettleAsync(ServiceBusReceiver receiver, ServiceBusReceivedMessage msg, SettlementAction action, CancellationToken ct)

@@ -4,20 +4,15 @@ using System.Management.Automation;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Get, "SBQueue", DefaultParameterSetName = ParameterSetAll)]
 [OutputType(typeof(QueueProperties))]
-public sealed class GetSBQueueCommand : PSCmdlet
+public sealed class GetSBQueueCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetAll = "All";
     private const string ParameterSetByName = "ByName";
-
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
 
     [Parameter(ParameterSetName = ParameterSetByName, Position = 0, ValueFromPipelineByPropertyName = true)]
     [Alias("Name", "QueueName")]
@@ -35,18 +30,25 @@ public sealed class GetSBQueueCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "GetSBQueueFailed", ErrorCategory.NotSpecified, Queue ?? ServiceBusConnectionString));
         }
     }
 
     private async Task<IReadOnlyList<object>> GetQueuesAsync()
     {
-        var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
+        var connectionString = ResolveConnectionString();
+        var admin = CreateAdminClient(connectionString);
         var results = new List<object>();
+        var targetQueue = TryResolveOptionalQueueTarget(Queue)?.Queue;
 
-        if (ParameterSetName == ParameterSetByName && !string.IsNullOrWhiteSpace(Queue))
+        if (!string.IsNullOrWhiteSpace(targetQueue))
         {
-            var single = await ReadSingleQueueAsync(admin, Queue!);
+            var single = await ReadSingleQueueAsync(admin, targetQueue!);
             results.Add(single);
             return results;
         }

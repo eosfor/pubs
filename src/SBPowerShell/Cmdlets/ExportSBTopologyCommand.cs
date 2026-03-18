@@ -3,23 +3,18 @@ using System.Text.Json.Serialization;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
 using SBPowerShell.Models;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsData.Export, "SBTopology", SupportsShouldProcess = true)]
 [OutputType(typeof(string))]
-public sealed class ExportSBTopologyCommand : PSCmdlet
+public sealed class ExportSBTopologyCommand : SBContextAwareCmdletBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
-
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, Position = 0)]
     [ValidateNotNullOrEmpty]
@@ -34,7 +29,8 @@ public sealed class ExportSBTopologyCommand : PSCmdlet
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
+            var connectionString = ResolveConnectionString();
+            var admin = CreateAdminClient(connectionString);
             var snapshot = BuildSnapshot(admin);
 
             var fullPath = System.IO.Path.GetFullPath(Path);
@@ -51,6 +47,11 @@ public sealed class ExportSBTopologyCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ExportSBTopologyFailed", ErrorCategory.NotSpecified, Path));
         }
     }

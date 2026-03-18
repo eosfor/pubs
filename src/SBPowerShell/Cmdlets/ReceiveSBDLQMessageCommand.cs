@@ -9,7 +9,7 @@ namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommunications.Receive, "SBDLQMessage", DefaultParameterSetName = ParameterSetQueue)]
 [OutputType(typeof(ServiceBusReceivedMessage))]
-public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
+public sealed class ReceiveSBDLQMessageCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetQueueMax = "QueueMax";
@@ -26,27 +26,18 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
     [Parameter(ParameterSetName = ParameterSetQueue)]
     [Parameter(ParameterSetName = ParameterSetQueueMax)]
     [Parameter(ParameterSetName = ParameterSetQueueWait)]
+    [ValidateNotNullOrEmpty]
+    public string Queue { get; set; } = string.Empty;
+
     [Parameter(ParameterSetName = ParameterSetSubscription)]
     [Parameter(ParameterSetName = ParameterSetSubscriptionMax)]
     [Parameter(ParameterSetName = ParameterSetSubscriptionWait)]
     [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueueMax)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueueWait)]
-    [ValidateNotNullOrEmpty]
-    public string Queue { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscriptionMax)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscriptionWait)]
-    [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscription)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscriptionMax)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetSubscriptionWait)]
+    [Parameter(ParameterSetName = ParameterSetSubscription)]
+    [Parameter(ParameterSetName = ParameterSetSubscriptionMax)]
+    [Parameter(ParameterSetName = ParameterSetSubscriptionWait)]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -97,6 +88,11 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ReceiveSBDLQMessageFailed", ErrorCategory.NotSpecified, this));
         }
     }
@@ -109,18 +105,24 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
     private void Receive(CancellationToken cancellationToken)
     {
         var plan = CreatePlan();
+        var connectionString = ResolveConnectionString();
+        var target = ResolveQueueOrSubscriptionTarget(
+            Queue,
+            Topic,
+            Subscription,
+            resolvedConnectionString: connectionString);
         ServiceBusClient? client = null;
         try
         {
-            client = new ServiceBusClient(ServiceBusConnectionString, CreateClientOptions(plan));
+            client = CreateServiceBusClient(connectionString, CreateClientOptions(plan));
 
-            if (IsQueueSet)
+            if (target.Kind == ResolvedEntityKind.Queue)
             {
-                ReceiveQueue(client, plan, cancellationToken);
+                ReceiveQueue(client, target.Queue, plan, cancellationToken);
             }
             else
             {
-                ReceiveSubscription(client, plan, cancellationToken);
+                ReceiveSubscription(client, target.Topic, target.Subscription, plan, cancellationToken);
             }
         }
         finally
@@ -129,36 +131,36 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveQueue(ServiceBusClient client, ReceivePlan plan, CancellationToken cancellationToken)
+    private void ReceiveQueue(ServiceBusClient client, string queue, ReceivePlan plan, CancellationToken cancellationToken)
     {
         try
         {
             var receiver = client.CreateReceiver(
-                Queue,
+                queue,
                 new ServiceBusReceiverOptions { SubQueue = SubQueue.DeadLetter });
 
             ReceiveFromReceiver(receiver, Peek, NoComplete, plan, cancellationToken);
         }
         catch (InvalidOperationException)
         {
-            ReceiveFromDeadLetterSessions(client, Queue, plan, cancellationToken);
+            ReceiveFromDeadLetterSessions(client, queue, plan, cancellationToken);
         }
     }
 
-    private void ReceiveSubscription(ServiceBusClient client, ReceivePlan plan, CancellationToken cancellationToken)
+    private void ReceiveSubscription(ServiceBusClient client, string topic, string subscription, ReceivePlan plan, CancellationToken cancellationToken)
     {
         try
         {
             var receiver = client.CreateReceiver(
-                Topic,
-                Subscription,
+                topic,
+                subscription,
                 new ServiceBusReceiverOptions { SubQueue = SubQueue.DeadLetter });
 
             ReceiveFromReceiver(receiver, Peek, NoComplete, plan, cancellationToken);
         }
         catch (InvalidOperationException)
         {
-            var entityPath = $"{Topic}/Subscriptions/{Subscription}";
+            var entityPath = $"{topic}/Subscriptions/{subscription}";
             ReceiveFromDeadLetterSessions(client, entityPath, plan, cancellationToken);
         }
     }
@@ -372,9 +374,6 @@ public sealed class ReceiveSBDLQMessageCommand : PSCmdlet
 
     private bool IsWaitParameterSet =>
         ParameterSetName is ParameterSetQueueWait or ParameterSetSubscriptionWait;
-
-    private bool IsQueueSet =>
-        ParameterSetName is ParameterSetQueue or ParameterSetQueueMax or ParameterSetQueueWait;
 
     private sealed class ReceivePlan
     {

@@ -1,19 +1,14 @@
 using System;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Set, "SBQueue", SupportsShouldProcess = true)]
 [OutputType(typeof(QueueProperties))]
-public sealed class SetSBQueueCommand : PSCmdlet
+public sealed class SetSBQueueCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidateNotNullOrEmpty]
     [Alias("Name", "QueueName")]
     public string Queue { get; set; } = string.Empty;
@@ -56,15 +51,18 @@ public sealed class SetSBQueueCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        if (!ShouldProcess(Queue, "Update Service Bus queue"))
+        var connectionString = ResolveConnectionString();
+        var target = ResolveQueueTarget(Queue);
+
+        if (!ShouldProcess($"Queue '{target.Queue}' (from {target.Source})", "Update Service Bus queue"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var queue = admin.GetQueueAsync(Queue).GetAwaiter().GetResult().Value;
+            var admin = CreateAdminClient(connectionString);
+            var queue = admin.GetQueueAsync(target.Queue).GetAwaiter().GetResult().Value;
 
             Apply(queue);
 
@@ -73,7 +71,12 @@ public sealed class SetSBQueueCommand : PSCmdlet
         }
         catch (Exception ex)
         {
-            ThrowTerminatingError(new ErrorRecord(ex, "SetSBQueueFailed", ErrorCategory.NotSpecified, Queue));
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
+            ThrowTerminatingError(new ErrorRecord(ex, "SetSBQueueFailed", ErrorCategory.NotSpecified, target.Queue));
         }
     }
 

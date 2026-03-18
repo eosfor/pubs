@@ -1,22 +1,17 @@
 using System;
 using System.Management.Automation;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Remove, "SBSubscription", SupportsShouldProcess = true, ConfirmImpact = ConfirmImpact.High)]
-public sealed class RemoveSBSubscriptionCommand : PSCmdlet
+public sealed class RemoveSBSubscriptionCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     [Alias("Name", "TopicName")]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidateNotNullOrEmpty]
     [Alias("SubscriptionName")]
     public string Subscription { get; set; } = string.Empty;
@@ -26,26 +21,33 @@ public sealed class RemoveSBSubscriptionCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        var target = $"{Topic}/{Subscription}";
+        var connectionString = ResolveConnectionString();
+        var target = ResolveSubscriptionTarget(Topic, Subscription, resolvedConnectionString: connectionString);
+        var targetPath = $"{target.Topic}/{target.Subscription}";
 
-        if (!Force && !ShouldContinue($"Remove subscription '{target}'?", "Confirm subscription deletion"))
+        if (!Force && !ShouldContinue($"Remove subscription '{targetPath}'?", "Confirm subscription deletion"))
         {
             return;
         }
 
-        if (!ShouldProcess(target, "Delete Service Bus subscription"))
+        if (!ShouldProcess($"Subscription '{targetPath}' (from {target.Source})", "Delete Service Bus subscription"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            admin.DeleteSubscriptionAsync(Topic, Subscription).GetAwaiter().GetResult();
+            var admin = CreateAdminClient(connectionString);
+            admin.DeleteSubscriptionAsync(target.Topic, target.Subscription).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            ThrowTerminatingError(new ErrorRecord(ex, "RemoveSBSubscriptionFailed", ErrorCategory.NotSpecified, target));
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
+            ThrowTerminatingError(new ErrorRecord(ex, "RemoveSBSubscriptionFailed", ErrorCategory.NotSpecified, targetPath));
         }
     }
 }

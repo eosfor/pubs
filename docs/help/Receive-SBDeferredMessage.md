@@ -14,21 +14,26 @@ Receives Service Bus SBDeferredMessage operations.
 
 ### Queue (Default)
 ```
-Receive-SBDeferredMessage [-ServiceBusConnectionString <String>] -SequenceNumber <Int64[]> [-ChunkSize <Int32>]
- [-Queue <String>] [-SessionId <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Receive-SBDeferredMessage -SequenceNumber <Int64[]> [-ChunkSize <Int32>] [-Queue <String>]
+ [-SessionId <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ### Subscription
 ```
-Receive-SBDeferredMessage [-ServiceBusConnectionString <String>] -SequenceNumber <Int64[]> [-ChunkSize <Int32>]
- [-Topic <String>] [-Subscription <String>] [-SessionId <String>] [-ProgressAction <ActionPreference>]
+Receive-SBDeferredMessage -SequenceNumber <Int64[]> [-ChunkSize <Int32>] [-Topic <String>]
+ [-Subscription <String>] [-SessionId <String>] [-ServiceBusConnectionString <String>] [-Context <SBContext>]
+ [-NoContext] [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
  [<CommonParameters>]
 ```
 
 ### Context
 ```
 Receive-SBDeferredMessage -SequenceNumber <Int64[]> [-ChunkSize <Int32>] [-SessionId <String>]
- -SessionContext <SessionContext> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ -SessionContext <SessionContext> [-ServiceBusConnectionString <String>] [-Context <SBContext>] [-NoContext]
+ [-IgnoreCertificateChainErrors] [-Transport <SBTransport>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -90,7 +95,7 @@ Connection string for the target Service Bus namespace or emulator.
 
 ```yaml
 Type: String
-Parameter Sets: Queue, Subscription
+Parameter Sets: (All)
 Aliases:
 
 Required: False
@@ -180,6 +185,66 @@ Specifies the ChunkSize value for this command.
 
 ```yaml
 Type: Int32
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Context
+Specifies the Context value for this command.
+
+```yaml
+Type: SBContext
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NoContext
+Specifies the NoContext value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -IgnoreCertificateChainErrors
+Specifies the IgnoreCertificateChainErrors value for this command.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Transport
+Specifies the Transport value for this command.
+
+```yaml
+Type: SBTransport
 Parameter Sets: (All)
 Aliases:
 

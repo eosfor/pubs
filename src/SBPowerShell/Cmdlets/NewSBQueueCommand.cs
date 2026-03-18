@@ -1,19 +1,14 @@
 using System;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.New, "SBQueue", SupportsShouldProcess = true)]
 [OutputType(typeof(QueueProperties))]
-public sealed class NewSBQueueCommand : PSCmdlet
+public sealed class NewSBQueueCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidateNotNullOrEmpty]
     [Alias("Name", "QueueName")]
     public string Queue { get; set; } = string.Empty;
@@ -65,15 +60,18 @@ public sealed class NewSBQueueCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        if (!ShouldProcess(Queue, "Create Service Bus queue"))
+        var connectionString = ResolveConnectionString();
+        var target = ResolveQueueTarget(Queue);
+
+        if (!ShouldProcess($"Queue '{target.Queue}' (from {target.Source})", "Create Service Bus queue"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var options = new CreateQueueOptions(Queue);
+            var admin = CreateAdminClient(connectionString);
+            var options = new CreateQueueOptions(target.Queue);
 
             ApplyOptions(options);
 
@@ -82,7 +80,12 @@ public sealed class NewSBQueueCommand : PSCmdlet
         }
         catch (Exception ex)
         {
-            ThrowTerminatingError(new ErrorRecord(ex, "NewSBQueueFailed", ErrorCategory.NotSpecified, Queue));
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
+            ThrowTerminatingError(new ErrorRecord(ex, "NewSBQueueFailed", ErrorCategory.NotSpecified, target.Queue));
         }
     }
 

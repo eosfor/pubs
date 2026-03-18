@@ -3,26 +3,21 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.New, "SBRule", DefaultParameterSetName = ParameterSetSql, SupportsShouldProcess = true)]
 [OutputType(typeof(RuleProperties))]
-public sealed class NewSBRuleCommand : PSCmdlet
+public sealed class NewSBRuleCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetSql = "Sql";
     private const string ParameterSetCorrelation = "Correlation";
 
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Topic { get; set; } = string.Empty;
 
-    [Parameter(Mandatory = true)]
+    [Parameter]
     [ValidateNotNullOrEmpty]
     public string Subscription { get; set; } = string.Empty;
 
@@ -66,15 +61,17 @@ public sealed class NewSBRuleCommand : PSCmdlet
 
     protected override void ProcessRecord()
     {
-        var target = $"{Topic}/{Subscription}/{Rule}";
-        if (!ShouldProcess(target, "Create Service Bus rule"))
+        var connectionString = ResolveConnectionString();
+        var resolvedTarget = ResolveSubscriptionTarget(Topic, Subscription, resolvedConnectionString: connectionString);
+        var target = $"{resolvedTarget.Topic}/{resolvedTarget.Subscription}/{Rule}";
+        if (!ShouldProcess($"Rule '{target}' (from {resolvedTarget.Source})", "Create Service Bus rule"))
         {
             return;
         }
 
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
+            var admin = CreateAdminClient(connectionString);
             var options = new CreateRuleOptions(Rule)
             {
                 Filter = BuildFilter()
@@ -85,11 +82,16 @@ public sealed class NewSBRuleCommand : PSCmdlet
                 options.Action = new SqlRuleAction(SqlAction);
             }
 
-            var created = admin.CreateRuleAsync(Topic, Subscription, options).GetAwaiter().GetResult().Value;
+            var created = admin.CreateRuleAsync(resolvedTarget.Topic, resolvedTarget.Subscription, options).GetAwaiter().GetResult().Value;
             WriteObject(created);
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "NewSBRuleFailed", ErrorCategory.NotSpecified, target));
         }
     }

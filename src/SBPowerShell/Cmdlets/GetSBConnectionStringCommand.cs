@@ -1,21 +1,16 @@
 using System.Management.Automation;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Get, "SBConnectionString")]
 [OutputType(typeof(string))]
-public sealed class GetSBConnectionStringCommand : PSCmdlet
+public sealed class GetSBConnectionStringCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(ParameterSetName = "Queue", Mandatory = true)]
+    [Parameter(ParameterSetName = "Queue")]
     [ValidateNotNullOrEmpty]
     public string? Queue { get; set; }
 
-    [Parameter(ParameterSetName = "Topic", Mandatory = true)]
+    [Parameter(ParameterSetName = "Topic")]
     [ValidateNotNullOrEmpty]
     public string? Topic { get; set; }
 
@@ -32,8 +27,13 @@ public sealed class GetSBConnectionStringCommand : PSCmdlet
     {
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var entity = AuthorizationRuleHelper.LoadEntity(admin, Queue, Topic);
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueOrTopicTarget(Queue, Topic, resolvedConnectionString: connectionString);
+            var admin = CreateAdminClient(connectionString);
+            var entity = AuthorizationRuleHelper.LoadEntity(
+                admin,
+                target.Kind == ResolvedEntityKind.Queue ? target.Queue : null,
+                target.Kind == ResolvedEntityKind.Topic ? target.Topic : null);
             var sasRule = AuthorizationRuleHelper.GetSharedAccessRule(entity, Rule);
 
             var key = KeyType == "Primary" ? sasRule.PrimaryKey : sasRule.SecondaryKey;
@@ -43,7 +43,7 @@ public sealed class GetSBConnectionStringCommand : PSCmdlet
             }
 
             var cs = AuthorizationRuleHelper.BuildConnectionString(
-                ServiceBusConnectionString,
+                connectionString,
                 entity.EntityPath,
                 sasRule.KeyName,
                 key);
@@ -52,6 +52,11 @@ public sealed class GetSBConnectionStringCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "GetSBConnectionStringFailed", ErrorCategory.NotSpecified, this));
         }
     }

@@ -1,22 +1,17 @@
 using System.Management.Automation;
 using Azure.Messaging.ServiceBus.Administration;
-using SBPowerShell;
 
 namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommon.Get, "SBAuthorizationRule")]
 [OutputType(typeof(AuthorizationRule))]
-public sealed class GetSBAuthorizationRuleCommand : PSCmdlet
+public sealed class GetSBAuthorizationRuleCommand : SBEntityTargetCmdletBase
 {
-    [Parameter(Mandatory = true)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
-
-    [Parameter(ParameterSetName = "Queue", Mandatory = true)]
+    [Parameter(ParameterSetName = "Queue")]
     [ValidateNotNullOrEmpty]
     public string? Queue { get; set; }
 
-    [Parameter(ParameterSetName = "Topic", Mandatory = true)]
+    [Parameter(ParameterSetName = "Topic")]
     [ValidateNotNullOrEmpty]
     public string? Topic { get; set; }
 
@@ -28,8 +23,13 @@ public sealed class GetSBAuthorizationRuleCommand : PSCmdlet
     {
         try
         {
-            var admin = ServiceBusAdminClientFactory.Create(ServiceBusConnectionString);
-            var entity = AuthorizationRuleHelper.LoadEntity(admin, Queue, Topic);
+            var connectionString = ResolveConnectionString();
+            var target = ResolveQueueOrTopicTarget(Queue, Topic, resolvedConnectionString: connectionString);
+            var admin = CreateAdminClient(connectionString);
+            var entity = AuthorizationRuleHelper.LoadEntity(
+                admin,
+                target.Kind == ResolvedEntityKind.Queue ? target.Queue : null,
+                target.Kind == ResolvedEntityKind.Topic ? target.Topic : null);
 
             var output = string.IsNullOrWhiteSpace(Rule)
                 ? entity.Rules.ToArray()
@@ -42,6 +42,11 @@ public sealed class GetSBAuthorizationRuleCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "GetSBAuthorizationRuleFailed", ErrorCategory.NotSpecified, this));
         }
     }

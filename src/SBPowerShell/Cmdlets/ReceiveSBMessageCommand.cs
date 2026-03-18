@@ -11,7 +11,7 @@ namespace SBPowerShell.Cmdlets;
 
 [Cmdlet(VerbsCommunications.Receive, "SBMessage", DefaultParameterSetName = ParameterSetQueue)]
 [OutputType(typeof(ServiceBusReceivedMessage))]
-public sealed class ReceiveSBMessageCommand : PSCmdlet
+public sealed class ReceiveSBMessageCommand : SBEntityTargetCmdletBase
 {
     private const string ParameterSetQueue = "Queue";
     private const string ParameterSetQueueMax = "QueueMax";
@@ -27,15 +27,6 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(1);
 
     private readonly CancellationTokenSource _cts = new();
-
-    [Parameter(ParameterSetName = ParameterSetQueue)]
-    [Parameter(ParameterSetName = ParameterSetQueueMax)]
-    [Parameter(ParameterSetName = ParameterSetQueueWait)]
-    [Parameter(ParameterSetName = ParameterSetSubscription)]
-    [Parameter(ParameterSetName = ParameterSetSubscriptionMax)]
-    [Parameter(ParameterSetName = ParameterSetSubscriptionWait)]
-    [ValidateNotNullOrEmpty]
-    public string ServiceBusConnectionString { get; set; } = string.Empty;
 
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueue)]
     [Parameter(Mandatory = true, ParameterSetName = ParameterSetQueueMax)]
@@ -101,9 +92,9 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
     [Parameter(ParameterSetName = ParameterSetContextWait)]
     public SwitchParameter NoComplete { get; set; }
 
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetContext, ValueFromPipeline = true)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetContextMax, ValueFromPipeline = true)]
-    [Parameter(Mandatory = true, ParameterSetName = ParameterSetContextWait, ValueFromPipeline = true)]
+    [Parameter(ParameterSetName = ParameterSetContext, ValueFromPipeline = true)]
+    [Parameter(ParameterSetName = ParameterSetContextMax, ValueFromPipeline = true)]
+    [Parameter(ParameterSetName = ParameterSetContextWait, ValueFromPipeline = true)]
     public SessionContext? SessionContext { get; set; }
 
     protected override void EndProcessing()
@@ -118,6 +109,11 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
         }
         catch (Exception ex)
         {
+            if (IsResolverException(ex))
+            {
+                throw;
+            }
+
             ThrowTerminatingError(new ErrorRecord(ex, "ReceiveSBMessageFailed", ErrorCategory.NotSpecified, this));
         }
     }
@@ -130,7 +126,18 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
     private void Receive(CancellationToken cancellationToken)
     {
         var plan = CreatePlan();
-        var client = SessionContext is null ? new ServiceBusClient(ServiceBusConnectionString, CreateClientOptions(plan)) : null;
+        var resolvedConnectionString = ResolveConnectionString(SessionContext);
+        var target = ResolveQueueOrSubscriptionTarget(
+            Queue,
+            Topic,
+            Subscription,
+            SessionContext,
+            sessionContextPriority: SessionContext is not null,
+            resolvedConnectionString: resolvedConnectionString);
+
+        var client = SessionContext is null
+            ? CreateServiceBusClient(resolvedConnectionString, CreateClientOptions(plan))
+            : null;
 
         if (SessionContext is not null)
         {
@@ -142,16 +149,16 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
         try
         {
-            if (IsQueueSet)
+            if (target.Kind == ResolvedEntityKind.Queue)
             {
                 ServiceBusReceiver receiver;
                 try
                 {
-                    receiver = client!.CreateReceiver(Queue);
+                    receiver = client!.CreateReceiver(target.Queue);
                 }
                 catch (InvalidOperationException)
                 {
-                    ReceiveFromSessions(client!, Peek, NoComplete, plan, cancellationToken);
+                    ReceiveFromSessions(client!, Peek, NoComplete, plan, target.Queue, cancellationToken);
                     return;
                 }
 
@@ -161,12 +168,12 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
                 }
                 catch (InvalidOperationException)
                 {
-                    ReceiveFromSessions(client!, Peek, NoComplete, plan, cancellationToken);
+                    ReceiveFromSessions(client!, Peek, NoComplete, plan, target.Queue, cancellationToken);
                 }
                 return;
             }
 
-            ReceiveTopicPath(client!, plan, cancellationToken);
+            ReceiveTopicPath(client!, plan, target.Topic, target.Subscription, cancellationToken);
         }
         finally
         {
@@ -174,16 +181,16 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveTopicPath(ServiceBusClient client, ReceivePlan plan, CancellationToken cancellationToken)
+    private void ReceiveTopicPath(ServiceBusClient client, ReceivePlan plan, string topic, string subscription, CancellationToken cancellationToken)
     {
         try
         {
-            var receiver = client.CreateReceiver(Topic, Subscription);
+            var receiver = client.CreateReceiver(topic, subscription);
             ReceiveFromReceiver(receiver, Peek, NoComplete, plan, cancellationToken);
         }
         catch (InvalidOperationException)
         {
-            ReceiveFromSubscriptionSessions(client, Peek, NoComplete, plan, cancellationToken);
+            ReceiveFromSubscriptionSessions(client, Peek, NoComplete, plan, topic, subscription, cancellationToken);
         }
     }
 
@@ -285,20 +292,20 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
         }
     }
 
-    private void ReceiveFromSubscriptionSessions(ServiceBusClient client, bool peek, bool noComplete, ReceivePlan plan, CancellationToken cancellationToken)
+    private void ReceiveFromSubscriptionSessions(ServiceBusClient client, bool peek, bool noComplete, ReceivePlan plan, string topic, string subscription, CancellationToken cancellationToken)
     {
         ReceiveFromSessionAwareEntity(
-            ct => client.AcceptNextSessionAsync(Topic, Subscription, cancellationToken: ct),
+            ct => client.AcceptNextSessionAsync(topic, subscription, cancellationToken: ct),
             peek,
             noComplete,
             plan,
             cancellationToken);
     }
 
-    private void ReceiveFromSessions(ServiceBusClient client, bool peek, bool noComplete, ReceivePlan plan, CancellationToken cancellationToken)
+    private void ReceiveFromSessions(ServiceBusClient client, bool peek, bool noComplete, ReceivePlan plan, string queue, CancellationToken cancellationToken)
     {
         ReceiveFromSessionAwareEntity(
-            ct => client.AcceptNextSessionAsync(Queue, cancellationToken: ct),
+            ct => client.AcceptNextSessionAsync(queue, cancellationToken: ct),
             peek,
             noComplete,
             plan,
@@ -405,9 +412,6 @@ public sealed class ReceiveSBMessageCommand : PSCmdlet
 
     private bool IsWaitParameterSet =>
         ParameterSetName is ParameterSetQueueWait or ParameterSetSubscriptionWait or ParameterSetContextWait;
-
-    private bool IsQueueSet =>
-        ParameterSetName is ParameterSetQueue or ParameterSetQueueMax or ParameterSetQueueWait;
 
     private sealed class ReceivePlan
     {
