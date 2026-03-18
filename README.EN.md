@@ -6,6 +6,7 @@ PowerShell module for Azure Service Bus and local Service Bus Emulator workflows
 - `New-SBMessage` - create message template(s) with SessionId and application properties.
 - `Send-SBMessage` - send to queue or topic; supports per-session parallel sending (`-PerSessionThreadAuto` or `-PerSessionThread`).
 - `Receive-SBMessage` - read from queue or subscription; supports peek (`-Peek`) without removal and `-NoComplete` for manual settlement; automatically switches to a session receiver when the entity requires sessions; supports `-SessionContext` to reuse an open session receiver.
+- `Export-SBMessage` - non-destructive export of active messages to `json` or `jsonl` using `Peek`, including all high-level message fields, application properties, and body.
 - `Receive-SBDLQMessage` - read dead-letter queue/subscription; supports `-Peek`, `-NoComplete`, `-MaxMessages`; automatically switches to session DLQ when needed.
 - `Receive-SBDeferredMessage` - receive deferred messages by SequenceNumber (sessions are supported).
 - `Set-SBMessage` - manually complete/abandon/defer/dead-letter received messages.
@@ -212,6 +213,24 @@ Receive-SBDLQMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBus
 # Without -MaxMessages and -WaitSeconds, the command does continuous polling until cancelled (Ctrl+C).
 # For bounded runs, use either -MaxMessages or -WaitSeconds. Session DLQ is handled automatically.
 ```
+
+Non-destructive export to JSON / JSONL:
+```pwsh
+# Bounded subscription export to JSON
+Export-SBMessage -Topic "sales" -Subscription "audit" -OutputPath "./audit.json" -Format Json -MaxMessages 5000
+
+# Resumable queue export to JSONL with a checkpoint
+Export-SBMessage -Queue "orders" -OutputPath "./orders.jsonl" -FromSequenceNumber 120000 -CheckpointPath "./orders.checkpoint.json"
+
+# Export using the current SBContext
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+Export-SBMessage -OutputPath "./current.jsonl"
+```
+
+Notes:
+- `Export-SBMessage` uses `Peek` only and does not modify broker state.
+- Export includes all high-level `ServiceBusReceivedMessage` fields, `ApplicationProperties`, and body as `Base64` plus best-effort `Utf8`.
+- `CheckpointPath` is supported only for `Jsonl`.
 
 Manual settlement/defer flow:
 ```pwsh

@@ -8,6 +8,7 @@ PowerShell‑модуль для работы с Azure Service Bus и локал
 - `New-SBMessage` — создать шаблон(ы) сообщений с SessionId и application properties.
 - `Send-SBMessage` — отправка в очередь или топик, поддерживает параллельную отправку по сессиям (`-PerSessionThreadAuto` или `-PerSessionThread`).
 - `Receive-SBMessage` — чтение из очереди или подписки; поддерживает peek (`-Peek`) без удаления и `-NoComplete` для ручного подтверждения; автоматически переключается на session receiver, если сущность требует сессии, и умеет принимать `-SessionContext` для повторного использования открытой сессии.
+- `Export-SBMessage` — недеструктивный export active messages в `json` или `jsonl` через `Peek`, включая все high-level поля сообщения, application properties и body.
 - `Receive-SBDLQMessage` — чтение dead-letter очереди/подписки; те же ключи `-Peek`, `-NoComplete`, `-MaxMessages`, автоматически подключается к session DLQ при необходимости.
 - `Receive-SBDeferredMessage` — получение отложенных (deferred) сообщений по SequenceNumber (сессии поддерживаются).
 - `Set-SBMessage` — вручную завершить/abandon/defer/dead-letter полученные сообщения.
@@ -252,6 +253,24 @@ Receive-SBDLQMessage -Topic "NO_SESSION" -Subscription "NO_SESS_SUB" -ServiceBus
 # Без -MaxMessages и -WaitSeconds команда выполняет непрерывный polling до отмены (Ctrl+C).
 # Для ограниченного вызова используйте либо -MaxMessages, либо -WaitSeconds. Сессионные DLQ обрабатываются автоматически.
 ```
+
+Недеструктивный export в JSON / JSONL:
+```pwsh
+# Ограниченный export подписки в JSON
+Export-SBMessage -Topic "sales" -Subscription "audit" -OutputPath "./audit.json" -Format Json -MaxMessages 5000
+
+# Резюмируемый export очереди в JSONL через checkpoint
+Export-SBMessage -Queue "orders" -OutputPath "./orders.jsonl" -FromSequenceNumber 120000 -CheckpointPath "./orders.checkpoint.json"
+
+# Export по текущему SBContext
+Set-SBContext -ServiceBusConnectionString $conn -Queue "test-queue"
+Export-SBMessage -OutputPath "./current.jsonl"
+```
+
+Замечания:
+- `Export-SBMessage` использует только `Peek` и не меняет состояние сообщений в брокере.
+- В export попадают все high-level поля `ServiceBusReceivedMessage`, `ApplicationProperties` и body в `Base64` + best-effort `Utf8`.
+- `CheckpointPath` поддерживается только для `Jsonl`.
 
 Ручное подтверждение/отложка (settlements):
 ```pwsh
