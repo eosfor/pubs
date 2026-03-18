@@ -820,6 +820,33 @@ Describe "SBPowerShell cmdlets against emulator" {
         }
     }
 
+    It "resolves relative export paths from the current PowerShell location" {
+        Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
+
+        $messages = New-SBMessage -Body 'rel-one'
+        Send-SBMessage -Queue 'test-queue' -Message $messages -ServiceBusConnectionString $script:connectionString
+
+        $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sb-export-" + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tempDir | Out-Null
+        $relativePath = 'relative-export.json'
+        $expectedPath = Join-Path $tempDir $relativePath
+
+        try {
+            Push-Location $tempDir
+            $result = @(Export-SBMessage -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString -OutputPath $relativePath -Format Json -MaxMessages 1)
+
+            $result.Count | Should -Be 1
+            $result[0].FullName | Should -Be $expectedPath
+            Test-Path $expectedPath | Should -BeTrue
+        }
+        finally {
+            Pop-Location
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+            }
+        }
+    }
+
     It "resumes jsonl export from checkpoint" {
         Clear-SBQueue -Queue 'test-queue' -ServiceBusConnectionString $script:connectionString | Out-Null
 

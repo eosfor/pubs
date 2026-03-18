@@ -93,12 +93,12 @@ public sealed class ExportSBMessageCommand : SBEntityTargetCmdletBase
         var format = ResolveFormat(OutputPath, Format);
         ValidateCheckpointUsage(format);
 
-        var absoluteOutputPath = Path.GetFullPath(OutputPath);
+        var absoluteOutputPath = ResolvePowerShellPath(OutputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(absoluteOutputPath) ?? ".");
 
         var checkpointStore = string.IsNullOrWhiteSpace(CheckpointPath)
             ? null
-            : new ExportCheckpointStore(Path.GetFullPath(CheckpointPath));
+            : new ExportCheckpointStore(ResolvePowerShellPath(CheckpointPath));
 
         var checkpoint = checkpointStore?.TryLoad();
         ValidateCheckpoint(target, format, absoluteOutputPath, checkpoint);
@@ -243,5 +243,29 @@ public sealed class ExportSBMessageCommand : SBEntityTargetCmdletBase
             SBExportFormat.Json => new JsonArrayMessageExportWriter(path),
             _ => new JsonlMessageExportWriter(path, append)
         };
+    }
+
+    private string ResolvePowerShellPath(string path)
+    {
+        try
+        {
+            return SessionState.Path.GetUnresolvedProviderPathFromPSPath(path);
+        }
+        catch (PSNotSupportedException ex)
+        {
+            throw new ArgumentException("Output path must resolve to a filesystem path.", nameof(path), ex);
+        }
+        catch (System.Management.Automation.DriveNotFoundException ex)
+        {
+            throw new ArgumentException($"Path '{path}' could not be resolved from the current PowerShell location.", nameof(path), ex);
+        }
+        catch (ProviderNotFoundException ex)
+        {
+            throw new ArgumentException("Only filesystem paths are supported for export output and checkpoints.", nameof(path), ex);
+        }
+        catch (ItemNotFoundException ex)
+        {
+            throw new ArgumentException($"Path '{path}' could not be resolved from the current PowerShell location.", nameof(path), ex);
+        }
     }
 }
